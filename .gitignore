@@ -1,0 +1,28 @@
+# Python venv
+venv/
+backend/venv/
+
+# Python bytecode
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Django stuff
+db.sqlite3
+*.log
+
+# IDE files
+.vscode/
+.idea/
+
+# Environment variables
+*.env
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Node stuff (for frontend)
+node_modules/
+dist/
+build/
