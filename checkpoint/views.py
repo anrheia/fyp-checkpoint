@@ -3,11 +3,15 @@ from django.db import transaction
 from django.shortcuts import render, redirect
 from django.contrib.auth.decorators import login_required
 from django.http import HttpResponse
+from django.contrib.auth import get_user_model
 
-from .forms import OwnerSignUpForm
+from .forms import OwnerSignUpForm, InviteStaffForm
 from .models import Restaurant, RestaurantMembership
+from .utils import send_invitation_email, generate_temporary_password
 
 # Create your views here.
+
+User = get_user_model()
 
 def home(request):
     return render(request, 'home.html')
@@ -39,4 +43,45 @@ def dashboard(request):
 
     if is_owner:
         return render(request, 'dashboard/owner_dashboard.html')
-    return HttpResponse("Welcome to the Employee Dashboard!")
+    return render(request, 'dashboard/staff_dashboard.html')
+
+def invite_staff(request):
+    owner_membership = RestaurantMembership.objects.filter(
+        user=request.user,
+        role=RestaurantMembership.OWNER
+    ).select_related('restaurant').first()
+    if not owner_membership:
+        return HttpResponse("You must be an owner to invite staff.", status=403)
+    
+    restaurant = owner_membership.restaurant
+
+    if request.method == 'POST':
+        form = InviteStaffForm(request.POST)
+        if form.is_valid():
+            email = form.cleaned_data['email'].lower().strip()
+            temp_password = generate_temporary_password()
+
+            user, created = User.objects.get_or_create(
+                username=email, 
+                defaults={'email': email}
+            )
+
+            if not created:
+                form.add_error('email', 'A user with this email already exists.')
+                return render(request, 'dashboard/invite_staff.html', {'form': form})
+            
+            user.set_password(temp_password)
+            user.save()
+
+            RestaurantMembership.objects.create(
+                user=user,
+                restaurant=restaurant,
+                role=RestaurantMembership.EMPLOYEE
+            )
+
+            send_invitation_email(email, restaurant.name, temp_password)
+
+            return redirect('dashboard')
+    else:
+        form = InviteStaffForm()
+    return render(request, 'dashboard/invite_staff.html', {'form': form})

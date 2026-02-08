@@ -19,3 +19,6 @@ class OwnerSignUpForm(UserCreationForm):
         if commit:
             user.save()
         return user
+class InviteStaffForm(forms.Form):
+    email = forms.EmailField(required=True)
+
