@@ -23,6 +23,8 @@ class RestaurantMembership(models.Model):
     restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE)
     role = models.CharField(max_length=20, choices=role_choices)
 
+    must_change_password = models.BooleanField(default=False)
+
     class Meta:
         constraints = [
             models.UniqueConstraint(fields=['user', 'restaurant'], name='unique_membership')

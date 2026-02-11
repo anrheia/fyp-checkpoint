@@ -50,6 +50,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'checkpoint.middleware.ForcePasswordChangeMiddleware',
 ]
 
 ROOT_URLCONF = 'myproject.urls'

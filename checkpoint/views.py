@@ -1,9 +1,10 @@
-from django.contrib.auth import login
+from django.contrib.auth import login, get_user_model
 from django.db import transaction
 from django.shortcuts import render, redirect
 from django.contrib.auth.decorators import login_required
 from django.http import HttpResponse
-from django.contrib.auth import get_user_model
+from django.urls import reverse_lazy
+from django.contrib.auth.views import PasswordChangeView
 
 from .forms import OwnerSignUpForm, InviteStaffForm
 from .models import Restaurant, RestaurantMembership
@@ -45,6 +46,20 @@ def dashboard(request):
         return render(request, 'dashboard/owner_dashboard.html')
     return render(request, 'dashboard/staff_dashboard.html')
 
+class FirstLoginPasswordChangeView(PasswordChangeView):
+    template_name = 'dashboard/first_login_password_change.html'
+    success_url = reverse_lazy('dashboard')
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        
+        RestaurantMembership.objects.filter(
+            user=self.request.user,
+            must_change_password=True
+        ).update(must_change_password=False)
+
+        return response
+
 @login_required
 def invite_staff(request):
     owner_membership = RestaurantMembership.objects.filter(
@@ -73,7 +88,8 @@ def invite_staff(request):
             RestaurantMembership.objects.create(
                 user=user,
                 restaurant=restaurant,
-                role=RestaurantMembership.EMPLOYEE
+                role=RestaurantMembership.EMPLOYEE,
+                must_change_password=True
             )
 
             send_invitation_email(restaurant.name, user.email, user.username, temp_password)

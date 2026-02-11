@@ -23,6 +23,7 @@ from checkpoint import views
 urlpatterns = [
     path('', views.home, name='home'),
     path('admin/', admin.site.urls),
+    path('accounts/password_change/', views.FirstLoginPasswordChangeView.as_view(), name='password_change'),
     path('accounts/', include('django.contrib.auth.urls')),  # For built-in auth views
     path('', include('checkpoint.urls')),
 ]
