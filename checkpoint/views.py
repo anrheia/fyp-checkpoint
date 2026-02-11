@@ -45,6 +45,7 @@ def dashboard(request):
         return render(request, 'dashboard/owner_dashboard.html')
     return render(request, 'dashboard/staff_dashboard.html')
 
+@login_required
 def invite_staff(request):
     owner_membership = RestaurantMembership.objects.filter(
         user=request.user,
@@ -58,18 +59,14 @@ def invite_staff(request):
     if request.method == 'POST':
         form = InviteStaffForm(request.POST)
         if form.is_valid():
-            email = form.cleaned_data['email'].lower().strip()
             temp_password = generate_temporary_password()
 
-            user, created = User.objects.get_or_create(
-                username=email, 
-                defaults={'email': email}
-            )
+            user = form.save(commit=False)
 
-            if not created:
-                form.add_error('email', 'A user with this email already exists.')
-                return render(request, 'dashboard/invite_staff.html', {'form': form})
-            
+            user.email = form.cleaned_data['email'].lower().strip()
+            user.username = form.cleaned_data['username'].strip()
+
+
             user.set_password(temp_password)
             user.save()
 
@@ -79,7 +76,7 @@ def invite_staff(request):
                 role=RestaurantMembership.EMPLOYEE
             )
 
-            send_invitation_email(email, restaurant.name, temp_password)
+            send_invitation_email(restaurant.name, user.email, user.username, temp_password)
 
             return redirect('dashboard')
     else:
