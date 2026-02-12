@@ -7,7 +7,7 @@ from django.urls import reverse_lazy
 from django.contrib.auth.views import PasswordChangeView
 
 from .forms import OwnerSignUpForm, InviteStaffForm
-from .models import Restaurant, RestaurantMembership
+from .models import Business, BusinessMembership
 from .utils import send_invitation_email, generate_temporary_password
 
 # Create your views here.
@@ -23,11 +23,11 @@ def owner_signup(request):
         form = OwnerSignUpForm(request.POST)
         if form.is_valid():
             user = form.save()
-            restaurant = Restaurant.objects.create(name=form.cleaned_data.get('restaurant_name'))
-            RestaurantMembership.objects.create(
+            business = Business.objects.create(name=form.cleaned_data.get('business_name'))
+            BusinessMembership.objects.create(
                 user=user, 
-                restaurant=restaurant, 
-                role=RestaurantMembership.OWNER
+                business=business, 
+                role=BusinessMembership.OWNER
             )
             login(request, user)
             return redirect('home')
@@ -37,9 +37,9 @@ def owner_signup(request):
 
 @login_required
 def dashboard(request):
-    is_owner = RestaurantMembership.objects.filter(
+    is_owner = BusinessMembership.objects.filter(
         user=request.user,
-        role=RestaurantMembership.OWNER
+        role=BusinessMembership.OWNER
     ).exists()
 
     if is_owner:
@@ -53,7 +53,7 @@ class FirstLoginPasswordChangeView(PasswordChangeView):
     def form_valid(self, form):
         response = super().form_valid(form)
         
-        RestaurantMembership.objects.filter(
+        BusinessMembership.objects.filter(
             user=self.request.user,
             must_change_password=True
         ).update(must_change_password=False)
@@ -62,14 +62,14 @@ class FirstLoginPasswordChangeView(PasswordChangeView):
 
 @login_required
 def invite_staff(request):
-    owner_membership = RestaurantMembership.objects.filter(
+    owner_membership = BusinessMembership.objects.filter(
         user=request.user,
-        role=RestaurantMembership.OWNER
-    ).select_related('restaurant').first()
+        role=BusinessMembership.OWNER
+    ).select_related('business').first()
     if not owner_membership:
         return HttpResponse("You must be an owner to invite staff.", status=403)
     
-    restaurant = owner_membership.restaurant
+    business = owner_membership.business
 
     if request.method == 'POST':
         form = InviteStaffForm(request.POST)
@@ -85,14 +85,14 @@ def invite_staff(request):
             user.set_password(temp_password)
             user.save()
 
-            RestaurantMembership.objects.create(
+            BusinessMembership.objects.create(
                 user=user,
-                restaurant=restaurant,
-                role=RestaurantMembership.EMPLOYEE,
+                business=business,
+                role=BusinessMembership.EMPLOYEE,
                 must_change_password=True
             )
 
-            send_invitation_email(restaurant.name, user.email, user.username, temp_password)
+            send_invitation_email(business.name, user.email, user.username, temp_password)
 
             return redirect('dashboard')
     else:

@@ -1,5 +1,5 @@
 from django.shortcuts import render, redirect
-from .models import RestaurantMembership
+from .models import BusinessMembership
 
 class ForcePasswordChangeMiddleware:
     def __init__(self, get_response):
@@ -19,9 +19,9 @@ class ForcePasswordChangeMiddleware:
                 return self.get_response(request)
             
 
-            if RestaurantMembership.objects.filter(
+            if BusinessMembership.objects.filter(
                 user=request.user,
-                role=RestaurantMembership.EMPLOYEE,
+                role=BusinessMembership.EMPLOYEE,
                 must_change_password=True
                 ).exists():
                     return redirect('password_change')

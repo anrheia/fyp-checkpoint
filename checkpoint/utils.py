@@ -5,10 +5,10 @@ from django.utils.crypto import get_random_string
 def generate_temporary_password(length=12):
     return get_random_string(length)
 
-def send_invitation_email(restaurant_name, email, username, temp_password):
-    subject = f"Invitation to join {restaurant_name} on CheckPoint"
+def send_invitation_email(business_name, email, username, temp_password):
+    subject = f"Invitation to join {business_name} on CheckPoint"
     message = (
-        f"You have been invited to join {restaurant_name} as a staff member.\n\n"
+        f"You have been invited to join {business_name} as a staff member.\n\n"
         f"Please use the following username: {username}\n\n"
         f"Your temporary password is: {temp_password}\n\n"
         "Please log in and change your password as soon as possible."
