@@ -25,7 +25,7 @@ class OwnerSignUpForm(UserCreationForm):
 class NewBranchForm(forms.ModelForm):
     class Meta:
         model = Business
-        fields = ('name')
+        fields = ('name',)
 
 class InviteStaffForm(forms.ModelForm):
     class Meta:

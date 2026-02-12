@@ -7,15 +7,36 @@
 </head>
 <body>
     <h1>Welcome to your Dashboard</h1>
-    <p>Temporary dashboard for owner users.</p>
+    <p>Choose a branch to manage.</p>
 
     <form method="post" action="{% url 'logout' %}">
         {% csrf_token %}
         <button type="submit">Log out</button>
     </form>
 
-    <a href="{% url 'invite_staff' %}">
-        <button type="button">Invite Staff Member</button>
+    <hr>
+
+    <h2>Your Branches</h2>
+
+    {% if branches %}
+        <ul>
+            {% for b in branches %}
+                <li>
+                    <strong>{{ b.name }}</strong>
+                    <a href="{% url 'invite_staff' b.id %}">
+                        <button type="button">Invite Staff</button>
+                    </a>
+                </li>
+            {% endfor %}
+        </ul>
+    {% else %}
+        <p>You don't have any branches yet.</p>
+    {% endif %}
+
+    <hr>
+
+    <a href="{% url 'create_branch' %}">
+        <button type="button">Create New Branch</button>
     </a>
 </body>
 </html>
