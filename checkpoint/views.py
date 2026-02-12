@@ -1,6 +1,100 @@
-from django.shortcuts import render
+from django.contrib.auth import login, get_user_model
+from django.db import transaction
+from django.shortcuts import render, redirect
+from django.contrib.auth.decorators import login_required
+from django.http import HttpResponse
+from django.urls import reverse_lazy
+from django.contrib.auth.views import PasswordChangeView
+
+from .forms import OwnerSignUpForm, InviteStaffForm
+from .models import Restaurant, RestaurantMembership
+from .utils import send_invitation_email, generate_temporary_password
 
 # Create your views here.
 
+User = get_user_model()
+
 def home(request):
     return render(request, 'home.html')
+
+@transaction.atomic
+def owner_signup(request):
+    if request.method == 'POST':
+        form = OwnerSignUpForm(request.POST)
+        if form.is_valid():
+            user = form.save()
+            restaurant = Restaurant.objects.create(name=form.cleaned_data.get('restaurant_name'))
+            RestaurantMembership.objects.create(
+                user=user, 
+                restaurant=restaurant, 
+                role=RestaurantMembership.OWNER
+            )
+            login(request, user)
+            return redirect('home')
+    else:
+        form = OwnerSignUpForm()
+    return render(request, 'registration/owner_signup.html', {'form': form})
+
+@login_required
+def dashboard(request):
+    is_owner = RestaurantMembership.objects.filter(
+        user=request.user,
+        role=RestaurantMembership.OWNER
+    ).exists()
+
+    if is_owner:
+        return render(request, 'dashboard/owner_dashboard.html')
+    return render(request, 'dashboard/staff_dashboard.html')
+
+class FirstLoginPasswordChangeView(PasswordChangeView):
+    template_name = 'dashboard/first_login_password_change.html'
+    success_url = reverse_lazy('dashboard')
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        
+        RestaurantMembership.objects.filter(
+            user=self.request.user,
+            must_change_password=True
+        ).update(must_change_password=False)
+
+        return response
+
+@login_required
+def invite_staff(request):
+    owner_membership = RestaurantMembership.objects.filter(
+        user=request.user,
+        role=RestaurantMembership.OWNER
+    ).select_related('restaurant').first()
+    if not owner_membership:
+        return HttpResponse("You must be an owner to invite staff.", status=403)
+    
+    restaurant = owner_membership.restaurant
+
+    if request.method == 'POST':
+        form = InviteStaffForm(request.POST)
+        if form.is_valid():
+            temp_password = generate_temporary_password()
+
+            user = form.save(commit=False)
+
+            user.email = form.cleaned_data['email'].lower().strip()
+            user.username = form.cleaned_data['username'].strip()
+
+
+            user.set_password(temp_password)
+            user.save()
+
+            RestaurantMembership.objects.create(
+                user=user,
+                restaurant=restaurant,
+                role=RestaurantMembership.EMPLOYEE,
+                must_change_password=True
+            )
+
+            send_invitation_email(restaurant.name, user.email, user.username, temp_password)
+
+            return redirect('dashboard')
+    else:
+        form = InviteStaffForm()
+    return render(request, 'dashboard/invite_staff.html', {'form': form})
