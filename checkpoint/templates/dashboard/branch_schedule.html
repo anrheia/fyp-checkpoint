@@ -28,14 +28,23 @@
     <script>
         document.addEventListener('DOMContentLoaded', function () {
             const calendar = new FullCalendar.Calendar(document.getElementById('calendar'), {
-            initialView: 'timeGridWeek',   // better for work schedules
-            height: "auto",
-            nowIndicator: true,
-            events: "{% url 'branch_shifts_json' business.id %}",
-            });
+                initialView: 'timeGridWeek',   // better for work schedules
+                height: "auto",
+                nowIndicator: true,
+                events: "{% url 'branch_shifts_json' business.id %}",
 
+                eventClick: function(info) {
+                    const shiftId = info.event.id;
+                    const deleteUrl = `/branches/{{ business.id }}/schedule/shifts/${shiftId}/delete/`;
+                    if (confirm('Do you want to delete this shift?')) {
+                        window.location.href = deleteUrl;
+                    }
+                }
+            }
+        );
             calendar.render();
         });
+
     </script>
 </body>
 </html>

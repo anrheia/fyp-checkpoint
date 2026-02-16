@@ -11,4 +11,5 @@ urlpatterns = [
     path('branches/<int:business_id>/schedule/', views.branch_schedule, name='branch_schedule'),
     path('branches/<int:business_id>/schedule/shifts.json', views.branch_shifts_json, name='branch_shifts_json'),
     path('branches/<int:business_id>/schedule/new/', views.create_shift, name='create_shift'),
+    path('branches/<int:business_id>/schedule/shifts/<int:shift_id>/delete/', views.delete_shift, name='delete_shift')
 ]

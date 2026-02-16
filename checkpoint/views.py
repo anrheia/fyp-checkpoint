@@ -224,6 +224,35 @@ def create_shift(request, business_id):
         'business': business
     })
 
+def delete_shift(request, business_id, shift_id):
+    owner_membership = BusinessMembership.objects.filter(
+        user=request.user,
+        role=BusinessMembership.OWNER,
+        business_id=business_id
+    ).select_related('business').first()
+
+    if not owner_membership:
+        return HttpResponse({"error": "You do not have access to this branch."}, status=403)
+    
+    business = owner_membership.business
+
+    shift = WorkShift.objects.filter(
+        id=shift_id, 
+        business=business
+    ).first()
+    if not shift:
+        return HttpResponse({"error": "Shift not found."}, status=404)
+
+    if request.method == 'POST':
+        shift.delete()
+        return redirect('branch_schedule', business_id=business.id)
+
+    return render(request, 'dashboard/delete_shift.html', {
+        'shift': shift,
+        'business': business
+    })
+
+
 # Staff-related views
 
 class FirstLoginPasswordChangeView(PasswordChangeView):
