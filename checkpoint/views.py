@@ -118,6 +118,30 @@ def create_branch(request):
 
     return render(request, 'dashboard/create_branch.html', {'form': form})
 
+@login_required
+def view_staff(request, business_id):
+    owner_membership = BusinessMembership.objects.filter(
+        user=request.user,
+        role=BusinessMembership.OWNER,
+        business_id=business_id
+    ).select_related('business').first()
+
+    if not owner_membership:
+        return HttpResponse("You must be an owner to view staff.", status=403)  
+    
+    business = owner_membership.business
+
+    staff_memberships = BusinessMembership.objects.filter(
+        business=business,
+        role=BusinessMembership.EMPLOYEE
+    ).select_related('user').order_by('user__username')
+
+    return render(request, 'dashboard/view_staff.html', {
+        'business': business,
+        'staff_memberships': staff_memberships
+    })
+
+
 # Staff-related views
 
 class FirstLoginPasswordChangeView(PasswordChangeView):

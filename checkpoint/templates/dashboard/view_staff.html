@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Staff - {{ business.name }}</title>
+</head>
+<body>
+    <h1>Staff List for {{ business.name }}</h1>
+
+    <p>
+        <a href="{% url 'dashboard' %}">
+            <button type="button">Back to Dashboard</button>
+        </a>
+    </p>
+
+    <hr>
+    
+    {% if staff_memberships %}
+        <table border="1" cellpadding="8" cellspacing="0">
+            <thead>
+                <tr>
+                    <th>Username</th>
+                    <th>First name</th>
+                    <th>Last name</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for staff in staff_memberships %}
+                    <tr>
+                        <td>{{ staff.user.username }}</td>
+                        <td>{{ staff.user.first_name }}</td>
+                        <td>{{ staff.user.last_name }}</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p>No staff members found for this branch.</p>
+    {% endif %}
+
+</body>
+</html>

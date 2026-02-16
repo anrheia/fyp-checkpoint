@@ -26,6 +26,10 @@
                     <a href="{% url 'invite_staff' b.id %}">
                         <button type="button">Invite Staff</button>
                     </a>
+
+                    <a href="{% url 'view_staff' b.id %}">
+                        <button type="button">View Staff</button>
+                    </a>
                 </li>
             {% endfor %}
         </ul>
