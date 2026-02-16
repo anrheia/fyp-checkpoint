@@ -30,4 +30,22 @@ class BusinessMembership(models.Model):
             models.UniqueConstraint(fields=['user', 'business'], name='unique_membership')
         ]
 
-        
+class WorkShift(models.Model):
+    business = models.ForeignKey('Business', on_delete=models.CASCADE, related_name='shifts')
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='shifts')
+
+    start = models.DateTimeField()
+    end = models.DateTimeField()
+
+    notes = models.TextField(blank=True)
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, 
+        on_delete=models.SET_NULL, 
+        null=True, related_name='created_shifts'
+        )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.user.username} - {self.business.name} ({self.start} to {self.end})"

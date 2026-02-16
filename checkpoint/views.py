@@ -1,13 +1,15 @@
+from urllib import request
 from django.contrib.auth import login, get_user_model
 from django.db import transaction
 from django.shortcuts import render, redirect
 from django.contrib.auth.decorators import login_required
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
 from django.urls import reverse_lazy
 from django.contrib.auth.views import PasswordChangeView
+from django.utils import timezone
 
-from .forms import OwnerSignUpForm, InviteStaffForm, NewBranchForm
-from .models import Business, BusinessMembership
+from .forms import OwnerSignUpForm, InviteStaffForm, NewBranchForm, WorkShiftForm
+from .models import Business, BusinessMembership, WorkShift
 from .utils import send_invitation_email, generate_temporary_password
 
 # Create your views here.
@@ -141,6 +143,86 @@ def view_staff(request, business_id):
         'staff_memberships': staff_memberships
     })
 
+@login_required
+def branch_schedule(request, business_id):
+    owner_membership = BusinessMembership.objects.filter(
+        user=request.user,
+        role=BusinessMembership.OWNER,
+        business_id=business_id
+    ).select_related('business').first()
+
+    if not owner_membership:
+        return HttpResponse("You do not have access to this branch.", status=403)
+    
+    business = owner_membership.business
+
+    return render(request, 'dashboard/branch_schedule.html', {
+        'business': business
+    })
+
+@login_required
+def branch_shifts_json(request, business_id):
+    owner_membership = BusinessMembership.objects.filter(
+        user=request.user,
+        role=BusinessMembership.OWNER,
+        business_id=business_id
+    ).select_related('business').first()
+
+    if not owner_membership:
+        return JsonResponse({"error": "You do not have access to this branch."}, status=403)
+    
+    business = owner_membership.business
+    shifts = WorkShift.objects.filter(business=business).select_related('user').order_by('start')
+
+    data = []
+    for shift in shifts:
+
+        user = shift.user
+
+        full_name = f"{(user.first_name or '').strip()} {(user.last_name or '').strip()}".strip()
+        display_name = full_name if full_name else user.username
+
+        start_str = timezone.localtime(shift.start).strftime('%H:%M')
+        end_str = timezone.localtime(shift.end).strftime('%H:%M')
+        title = f"{display_name}"
+        data.append({
+            'id': shift.id,
+            'title': title,
+            'start': shift.start.isoformat(),
+            'end': shift.end.isoformat(),
+            'notes': shift.notes
+        })
+    return JsonResponse(data, safe=False)
+
+@login_required
+def create_shift(request, business_id):
+    owner_membership = BusinessMembership.objects.filter(
+        user=request.user,
+        role=BusinessMembership.OWNER,
+        business_id=business_id
+    ).select_related('business').first()
+
+    if not owner_membership:
+        return HttpResponse({"error": "You do not have access to this branch."}, status=403)
+    
+    business = owner_membership.business
+
+    form = WorkShiftForm(request.POST or None)
+    form.fields["user"].queryset = User.objects.filter(
+        businessmembership__business=business,
+    ).distinct().order_by('username')
+
+    if request.method == 'POST':
+        shift = form.save(commit=False)
+        shift.business = business
+        shift.created_by = request.user
+        shift.save()
+        return redirect('branch_schedule', business_id=business.id)
+
+    return render(request, 'dashboard/create_shift.html', {
+        'form': form,
+        'business': business
+    })
 
 # Staff-related views
 

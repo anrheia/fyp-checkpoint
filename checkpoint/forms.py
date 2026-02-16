@@ -2,7 +2,7 @@ from django import forms
 from django.contrib.auth import get_user_model
 from django.contrib.auth.forms import UserCreationForm
 
-from .models import Business
+from .models import Business, WorkShift
 
 User = get_user_model()
 
@@ -43,3 +43,14 @@ class InviteStaffForm(forms.ModelForm):
         if User.objects.filter(username=username).exists():
             raise forms.ValidationError("A user with this username already exists.")
         return username
+    
+class WorkShiftForm(forms.ModelForm):
+    class Meta:
+        model = WorkShift
+        fields = ('user', 'start', 'end', 'notes')
+        widgets = {
+            'start': forms.DateTimeInput(attrs={'type': 'datetime-local'}),
+            'end': forms.DateTimeInput(attrs={'type': 'datetime-local'}),
+        }
+
+        
