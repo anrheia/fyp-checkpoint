@@ -1,18 +1,19 @@
 from urllib import request
+from django.contrib import messages
 from django.contrib.auth import login, get_user_model
+from django.contrib.auth.views import PasswordChangeView
+from django.contrib.auth.decorators import login_required
 from django.db import transaction
 from django.shortcuts import render, redirect
-from django.contrib.auth.decorators import login_required
 from django.http import HttpResponse, JsonResponse
 from django.urls import reverse_lazy
-from django.contrib.auth.views import PasswordChangeView
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.http import require_POST
 
 from datetime import datetime, timedelta, time
 from .forms import OwnerSignUpForm, InviteStaffForm, NewBranchForm, WorkShiftForm
-from .models import Business, BusinessMembership, WorkShift
+from .models import Business, BusinessMembership, TimeClock, WorkShift
 from .utils import (
     send_invitation_email, 
     generate_temporary_password, 
@@ -60,7 +61,14 @@ def dashboard(request):
         return render(request, 'dashboard/owner_dashboard.html', {
             'branches': branches
             })
-    return render(request, 'dashboard/staff_dashboard.html')
+    
+    staff_memberships = BusinessMembership.objects.filter(
+        user=request.user,
+        role=BusinessMembership.EMPLOYEE
+    ).select_related('business').first()
+    return render(request, 'dashboard/staff_dashboard.html', {
+        'business': staff_memberships.business if staff_memberships else None
+    })
 
 # Owner-related views
 
@@ -340,6 +348,166 @@ def schedule_chat_api(request):
     answer = f"Scheduled at {business.name} on {target_date.strftime('%A %d %b %Y')}:\n" + "\n".join(lines)
     return JsonResponse({"answer": answer})
 
+#Clock-in/out related views
+@login_required
+@require_POST
+def clock_in(request, business_id):
+    membership = BusinessMembership.objects.filter(
+        user=request.user,
+        business_id=business_id
+    ).select_related("business").first()
+
+    if not membership:
+        messages.error(request, "You do not have access to this business.")
+        return redirect("dashboard")
+
+    business = membership.business
+    now = timezone.now()
+
+    if TimeClock.objects.filter(
+        business=business,
+        user=request.user,
+        clock_out__isnull=True
+    ).exists():
+        messages.error(request, "You are already clocked in.")
+        return redirect("dashboard")
+
+    active_shift = WorkShift.objects.filter(
+        business=business,
+        user=request.user,
+        start__lte=now,
+        end__gte=now
+    ).order_by("start").first()
+
+    if not active_shift:
+        messages.error(request, "You can only clock in during your scheduled shift.")
+        return redirect("dashboard")
+
+    if TimeClock.objects.filter(
+        business=business,
+        user=request.user,
+        shift=active_shift
+    ).exists():
+        messages.error(request, "You have already clocked in for this shift.")
+        return redirect("dashboard")
+
+    TimeClock.objects.create(
+        business=business,
+        user=request.user,
+        shift=active_shift,
+        clock_in=now
+    )
+
+    messages.success(request, "Clocked in successfully.")
+    return redirect("dashboard")
+
+@login_required
+@require_POST
+def clock_out(request, business_id):
+    membership = BusinessMembership.objects.filter(
+        user=request.user,
+        business_id=business_id
+    ).select_related("business").first()
+
+    if not membership:
+        messages.error(request, "You do not have access to this business.")
+        return redirect("dashboard")
+
+    business = membership.business
+    now = timezone.now()
+
+    open_clock = TimeClock.objects.filter(
+        business=business,
+        user=request.user,
+        clock_out__isnull=True
+    ).order_by("-clock_in").first()
+
+    if not open_clock:
+        messages.error(request, "You are not clocked in.")
+        return redirect("dashboard")
+
+    open_clock.clock_out = now
+    open_clock.save(update_fields=["clock_out"])
+
+    messages.success(request, "Clocked out successfully.")
+    return redirect("dashboard")
+
+def staff_status(request, business_id):
+    _, business, error_response = get_owner_membership(request, business_id, json=True)
+    if error_response:
+        return error_response
+    
+    now = timezone.localtime(timezone.now())
+    today = timezone.localdate()
+
+    minutes = 15
+    grace_period = now - timedelta(minutes=minutes)
+
+    tz = timezone.get_current_timezone()
+    day_start = timezone.make_aware(datetime.combine(today, time.min), tz)
+    day_end = timezone.make_aware(datetime.combine(today, time.max), tz)
+
+    staff_memberships = BusinessMembership.objects.filter(
+        business=business,
+        role=BusinessMembership.EMPLOYEE
+    ).select_related('user').order_by('user__username')
+    staff_users = [m.user for m in staff_memberships]
+
+    shifts = WorkShift.objects.filter(
+        business=business,
+        user__in=staff_users,
+        start__lte=now,
+        end__gte=grace_period
+    ).select_related('user').order_by('start')
+
+    shifts_by_user = {}
+    for shift in shifts:
+        shifts_by_user.setdefault(shift.user_id, []).append(shift)
+
+    open_clocks = TimeClock.objects.filter(
+        business=business,
+        user__in=staff_users,
+        clock_out__isnull=True
+    ).select_related('user', 'shift')
+
+    clock_by_user = {tc.user_id: tc for tc in open_clocks}
+
+    in_staff, late_staff, out_staff = [], [], []
+
+    for user in staff_users:
+        open_tc = clock_by_user.get(user.id)
+        if open_tc:
+            in_staff.append({
+                "user": user,
+                "clock_in": open_tc.clock_in
+            })
+            continue
+
+        todays = shifts_by_user.get(user.id, [])
+        active_shift = None
+        for shift in todays:
+            if shift.start <= now <= shift.end:
+                active_shift = shift
+                break
+
+        if active_shift and now > (active_shift.start + minutes):
+            late_staff.append({
+                "user": user,
+                "shift": active_shift
+            })
+        else:
+            out_staff.append({
+                "user": user,
+                "shift": active_shift
+            })
+
+        return render(request, 'dashboard/staff_status.html', {
+            "business": business,
+            "in_staff": in_staff,
+            "late_staff": late_staff,
+            "out_staff": out_staff
+        })
+        
 
 # Staff-related views
 

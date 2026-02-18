@@ -14,5 +14,9 @@ urlpatterns = [
     path('branches/<int:business_id>/schedule/shifts/<int:shift_id>/delete/', views.delete_shift, name='delete_shift'),
 
     path('schedule/chat/', views.schedule_chat, name='schedule_chat'),
-    path('schedule/chat/api/', views.schedule_chat_api, name='schedule_chat_api')
+    path('schedule/chat/api/', views.schedule_chat_api, name='schedule_chat_api'),
+
+    path("business/<int:business_id>/clock-in/", views.clock_in, name="clock_in"),
+    path("business/<int:business_id>/clock-out/", views.clock_out, name="clock_out"),
+    path("business/<int:business_id>/staff-status/", views.staff_status, name="staff_status"),
 ]
