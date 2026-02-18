@@ -7,11 +7,22 @@ from django.http import HttpResponse, JsonResponse
 from django.urls import reverse_lazy
 from django.contrib.auth.views import PasswordChangeView
 from django.utils import timezone
+from django.views.decorators.csrf import csrf_protect
+from django.views.decorators.http import require_POST
 
+from datetime import datetime, timedelta, time
 from .forms import OwnerSignUpForm, InviteStaffForm, NewBranchForm, WorkShiftForm
 from .models import Business, BusinessMembership, WorkShift
-from .utils import send_invitation_email, generate_temporary_password
-
+from .utils import (
+    send_invitation_email, 
+    generate_temporary_password, 
+    extract_schedule_query,
+    extract_weekday_request,
+    next_weekday,
+    get_owner_membership,
+    shift_to_dict
+    )
+from datetime import datetime, time
 # Create your views here.
 
 User = get_user_model()
@@ -143,55 +154,33 @@ def view_staff(request, business_id):
         'staff_memberships': staff_memberships
     })
 
+# Schedule-related views
+
 @login_required
 def branch_schedule(request, business_id):
-    owner_membership = BusinessMembership.objects.filter(
-        user=request.user,
-        role=BusinessMembership.OWNER,
-        business_id=business_id
-    ).select_related('business').first()
+    _, business, error_response = get_owner_membership(request, business_id, json=True)
 
-    if not owner_membership:
-        return HttpResponse("You do not have access to this branch.", status=403)
+    if error_response:
+        return error_response
     
-    business = owner_membership.business
-
     return render(request, 'dashboard/branch_schedule.html', {
         'business': business
     })
 
 @login_required
 def branch_shifts_json(request, business_id):
-    owner_membership = BusinessMembership.objects.filter(
-        user=request.user,
-        role=BusinessMembership.OWNER,
-        business_id=business_id
-    ).select_related('business').first()
+    _, business, error_response = get_owner_membership(request, business_id, json=True)
 
-    if not owner_membership:
-        return JsonResponse({"error": "You do not have access to this branch."}, status=403)
-    
-    business = owner_membership.business
-    shifts = WorkShift.objects.filter(business=business).select_related('user').order_by('start')
+    if error_response:
+        return error_response
 
-    data = []
-    for shift in shifts:
+    shifts = (
+        WorkShift.objects.filter(business=business)
+        .select_related('user')
+        .order_by('start')
+    )
 
-        user = shift.user
-
-        full_name = f"{(user.first_name or '').strip()} {(user.last_name or '').strip()}".strip()
-        display_name = full_name if full_name else user.username
-
-        start_str = timezone.localtime(shift.start).strftime('%H:%M')
-        end_str = timezone.localtime(shift.end).strftime('%H:%M')
-        title = f"{display_name}"
-        data.append({
-            'id': shift.id,
-            'title': title,
-            'start': shift.start.isoformat(),
-            'end': shift.end.isoformat(),
-            'notes': shift.notes
-        })
+    data = [shift_to_dict(shift) for shift in shifts]
     return JsonResponse(data, safe=False)
 
 @login_required
@@ -213,11 +202,12 @@ def create_shift(request, business_id):
     ).distinct().order_by('username')
 
     if request.method == 'POST':
-        shift = form.save(commit=False)
-        shift.business = business
-        shift.created_by = request.user
-        shift.save()
-        return redirect('branch_schedule', business_id=business.id)
+        if form.is_valid():
+            shift = form.save(commit=False)
+            shift.business = business
+            shift.created_by = request.user
+            shift.save()
+            return redirect('branch_schedule', business_id=business.id)
 
     return render(request, 'dashboard/create_shift.html', {
         'form': form,
@@ -251,6 +241,104 @@ def delete_shift(request, business_id, shift_id):
         'shift': shift,
         'business': business
     })
+
+# AI assistant views
+
+@login_required
+def schedule_chat(request):
+    return render(request, 'dashboard/schedule_chat.html')
+
+@login_required
+@require_POST
+@csrf_protect
+def schedule_chat_api(request):
+    msg = (request.POST.get("message") or "").strip()
+    if not msg:
+        return JsonResponse({"answer": "Type: who’s working next Friday in Luigi’s?"})
+
+    today = timezone.localdate().isoformat()
+    extracted = extract_schedule_query(msg, today)
+
+    iso_date = extracted.get("date")
+    branch_name = extracted.get("branch_name")
+
+    if not iso_date:
+        return JsonResponse({"answer": "I couldn’t find a date. Try: who’s working on 2026-02-20 in Luigi’s?"})
+
+    try:
+        target_date = datetime.fromisoformat(iso_date).date()
+    except Exception:
+        return JsonResponse({"answer": "That date looked invalid. Try YYYY-MM-DD."})
+
+    weekday_idx, qualifier = extract_weekday_request(msg)
+    if weekday_idx is not None:
+        today_date = timezone.localdate()
+
+        if qualifier == "next":
+            #next <weekday> = next occurrence after today
+            target_date = next_weekday(today_date, weekday_idx)
+
+        elif qualifier == "this":
+            #this <weekday> = that weekday in current week if not passed; else next
+            candidate = today_date + timedelta(days=(weekday_idx - today_date.weekday()))
+            if candidate < today_date:
+                candidate = next_weekday(today_date, weekday_idx)
+            target_date = candidate
+
+        else:
+            #plain "<weekday>" = next occurrence after today
+            target_date = next_weekday(today_date, weekday_idx)
+
+    owned_ids = BusinessMembership.objects.filter(
+        user=request.user,
+        role=BusinessMembership.OWNER
+    ).values_list("business_id", flat=True)
+
+    if branch_name:
+        branch_name = branch_name.strip()
+        matches = Business.objects.filter(
+            id__in=owned_ids,
+            name__icontains=branch_name
+        ).order_by("name")
+
+        if matches.count() == 0:
+            return JsonResponse({"answer": f"I couldn’t find a branch you own matching '{branch_name}'."})
+        if matches.count() > 1:
+            options = ", ".join(matches.values_list("name", flat=True)[:8])
+            return JsonResponse({"answer": f"That matches multiple branches: {options}. Be more specific."})
+
+        business = matches.first()
+    else:
+        owned = Business.objects.filter(id__in=owned_ids).order_by("name")
+        if owned.count() == 0:
+            return JsonResponse({"answer": "You don’t seem to own any branches yet."})
+        if owned.count() > 1:
+            options = ", ".join(owned.values_list("name", flat=True)[:8])
+            return JsonResponse({"answer": f"Which branch? You own: {options}. Ask like: who’s working Friday in Luigi’s?"})
+        business = owned.first()
+
+    # Query shifts for that date
+    tz = timezone.get_current_timezone()
+    start_dt = timezone.make_aware(datetime.combine(target_date, time.min), tz)
+    end_dt = timezone.make_aware(datetime.combine(target_date, time.max), tz)
+
+    shifts = WorkShift.objects.filter(
+        business=business,
+        start__lte=end_dt,
+        end__gte=start_dt
+    ).select_related("user").order_by("start")
+
+    if not shifts.exists():
+        return JsonResponse({"answer": f"No one is scheduled at {business.name} on {target_date.strftime('%A %d %b %Y')}."})
+
+    lines = []
+    for s in shifts:
+        u = s.user
+        name = (f"{u.first_name} {u.last_name}".strip()) or u.username
+        lines.append(f"- {name}: {timezone.localtime(s.start).strftime('%H:%M')}–{timezone.localtime(s.end).strftime('%H:%M')}")
+
+    answer = f"Scheduled at {business.name} on {target_date.strftime('%A %d %b %Y')}:\n" + "\n".join(lines)
+    return JsonResponse({"answer": answer})
 
 
 # Staff-related views
