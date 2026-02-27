@@ -9,9 +9,16 @@
     <h2>{{ business.name }} — My hours Worked</h2>
     <section>
         <h3>This Week</h3>
+        <h4>Clocked Hours</h4>
         <p> {{ week_start }} to {{ week_end }}: {{ week_hours }}h {{ week_minutes }}</p>
+        <h4>Scheduled Hours</h4>
+        <p> {{ week_start }} to {{ week_end }}: {{ week_sched_hours }}h {{ week_sched_minutes }}</p>
+    </section>
         <h3>This Month</h3>
+        <h4>Clocked Hours</h4>
         <p> {{ month_start }} to {{ month_end }}: {{ month_hours }}h {{ month_minutes }}</p>
+        <h4>Scheduled Hours</h4>
+        <p> {{ month_start }} to {{ month_end }}: {{ month_sched_hours }}h {{ month_sched_minutes }}</p>
     </section>
 
     <section>

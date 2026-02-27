@@ -7,7 +7,7 @@ from django.contrib.auth.decorators import login_required
 
 from django.db import transaction
 from django.db.models import F, DurationField, ExpressionWrapper, DateTimeField, Sum, Value
-from django.db.models.functions import Coalesce
+from django.db.models.functions import Coalesce, Greatest, Least
 
 from django.shortcuts import render, redirect
 from django.http import HttpResponse, JsonResponse
@@ -516,7 +516,6 @@ def staff_status(request, business_id):
         
 
 # Staff-related views
-
 def staff_branch_shifts_json(request, business_id):
     _, business, error_response = get_membership(request, business_id, json=True)
 
@@ -548,9 +547,9 @@ class FirstLoginPasswordChangeView(PasswordChangeView):
 @login_required
 def my_hours(request, business_id):
     membership, business, error_response = get_membership(request, business_id, json=True)
-
     if error_response:
         return error_response
+
     today = timezone.localdate()
     tz = timezone.get_current_timezone()
 
@@ -558,8 +557,7 @@ def my_hours(request, business_id):
     week_end = week_start + timedelta(days=7)
 
     month_start = today.replace(day=1)
-
-    if month_start.weekday() == 12:
+    if month_start.month == 12:
         month_end = month_start.replace(year=month_start.year + 1, month=1)
     else:
         month_end = month_start.replace(month=month_start.month + 1)
@@ -571,48 +569,84 @@ def my_hours(request, business_id):
     week_end_dt = start_of_day(week_end)
     month_start_dt = start_of_day(month_start)
     month_end_dt = start_of_day(month_end)
-    
+
     duration_expr = ExpressionWrapper(
         F('clock_out') - F('clock_in'),
-        output_field=DateTimeField()
+        output_field=DurationField()
     )
 
-    def total_for_range(start_dt, end_dt):
+    def worked_total_for_range(start_dt, end_dt):
         qs = TimeClock.objects.filter(
             business=business,
             user=request.user,
-            clock_out__isnull=False,  
+            clock_out__isnull=False,
             clock_in__lt=end_dt,
             clock_out__gt=start_dt,
         )
         return qs.aggregate(
             total=Coalesce(
                 Sum(duration_expr),
-                Value(timedelta(0), output_field=DurationField()), 
+                Value(timedelta(0)),
                 output_field=DurationField(),
             )
         )["total"]
 
-    week_total = total_for_range(week_start_dt, week_end_dt)
-    month_total = total_for_range(month_start_dt, month_end_dt)
+    week_worked = worked_total_for_range(week_start_dt, week_end_dt)
+    month_worked = worked_total_for_range(month_start_dt, month_end_dt)
+
+    def scheduled_total_for_range(start_dt, end_dt):
+        qs = (
+            WorkShift.objects
+            .filter(
+                business=business,
+                user=request.user,
+                start__lt=end_dt,
+                end__gt=start_dt,
+            )
+            .annotate(
+                overlap=ExpressionWrapper(
+                    Least(F("end"), Value(end_dt, output_field=DateTimeField()))
+                    - Greatest(F("start"), Value(start_dt, output_field=DateTimeField())),
+                    output_field=DurationField(),
+                )
+            )
+            .filter(overlap__gt=timedelta(0))
+        )
+        return qs.aggregate(
+            total=Coalesce(
+                Sum("overlap"),
+                Value(timedelta(0)),
+                output_field=DurationField(),
+            )
+        )["total"]
+
+    week_scheduled = scheduled_total_for_range(week_start_dt, week_end_dt)
+    month_scheduled = scheduled_total_for_range(month_start_dt, month_end_dt)
 
     def hours_minutes(td):
         seconds = int(td.total_seconds())
         return seconds // 3600, (seconds % 3600) // 60
-    
-    week_hours, week_minutes = hours_minutes(week_total)
-    month_hours, month_minutes = hours_minutes(month_total)
 
-    return render(request, 'dashboard/my_hours.html', {
-        'business': business,
-        'week_start': week_start,
-        'week_end': week_end - timedelta(days=1),
-        'month_start': month_start,
-        'month_end': month_end - timedelta(days=1),
-        'week_hours': week_hours,
-        'week_minutes': week_minutes,
-        'month_hours': month_hours,
-        'month_minutes': month_minutes
+    week_worked_h, week_worked_m = hours_minutes(week_worked)
+    month_worked_h, month_worked_m = hours_minutes(month_worked)
+
+    week_sched_h, week_sched_m = hours_minutes(week_scheduled)
+    month_sched_h, month_sched_m = hours_minutes(month_scheduled)
+
+    return render(request, "dashboard/my_hours.html", {
+        "business": business,
+        "week_start": week_start,
+        "week_end": week_end - timedelta(days=1),
+        "month_start": month_start,
+        "month_end": month_end - timedelta(days=1),
+
+        "week_hours": week_worked_h,
+        "week_minutes": week_worked_m,
+        "month_hours": month_worked_h,
+        "month_minutes": month_worked_m,
+
+        "week_sched_hours": week_sched_h,
+        "week_sched_minutes": week_sched_m,
+        "month_sched_hours": month_sched_h,
+        "month_sched_minutes": month_sched_m,
     })
-
-

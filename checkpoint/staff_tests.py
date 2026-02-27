@@ -163,6 +163,46 @@ class MyHoursTest(TestCase):
             clock_out=self._aware(2026, 2, 24, 17, 0),
         )
 
+        WorkShift.objects.create(
+            business=self.business,
+            user=self.employee,
+            start=self._aware(2026, 2, 24, 9, 0),
+            end=self._aware(2026, 2, 24, 17, 0),
+            created_by=self.employee,
+        )
+
+        WorkShift.objects.create(
+            business=self.business,
+            user=self.employee,
+            start=self._aware(2026, 2, 26, 10, 0),
+            end=self._aware(2026, 2, 26, 14, 30),
+            created_by=self.employee,
+        )
+
+        WorkShift.objects.create(
+            business=self.business,
+            user=self.employee,
+            start=self._aware(2026, 2, 28, 23, 0),
+            end=self._aware(2026, 3, 1, 2, 0),
+            created_by=self.employee,
+        )
+
+        WorkShift.objects.create(
+            business=self.business,
+            user=self.employee,
+            start=self._aware(2026, 3, 2, 9, 0),
+            end=self._aware(2026, 3, 2, 12, 0),
+            created_by=self.employee,
+        )
+
+        WorkShift.objects.create(
+            business=self.business,
+            user=self.other_employee,
+            start=self._aware(2026, 2, 24, 9, 0),
+            end=self._aware(2026, 2, 24, 17, 0),
+            created_by=self.other_employee,
+        )
+
         self.client.login(username="staff1", password="pass123")
         resp = self.client.get(self.url)
         self.assertEqual(resp.status_code, 200)
@@ -172,6 +212,12 @@ class MyHoursTest(TestCase):
 
         self.assertEqual(resp.context["month_hours"], 12)
         self.assertEqual(resp.context["month_minutes"], 30)
+
+        self.assertEqual(resp.context["week_sched_hours"], 15)
+        self.assertEqual(resp.context["week_sched_minutes"], 30)
+
+        self.assertEqual(resp.context["month_sched_hours"], 13)
+        self.assertEqual(resp.context["month_sched_minutes"], 30)
 
         self.assertEqual(str(resp.context["week_start"]), "2026-02-23")
         self.assertEqual(str(resp.context["week_end"]), "2026-03-01")
