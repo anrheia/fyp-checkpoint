@@ -7,15 +7,105 @@
 </head>
 <body>
     <h1>Welcome to your Dashboard</h1>
-    <p>Temporary dashboard for owner users.</p>
+    <p>Choose a branch to manage.</p>
 
     <form method="post" action="{% url 'logout' %}">
         {% csrf_token %}
         <button type="submit">Log out</button>
     </form>
 
-    <a href="{% url 'invite_staff' %}">
-        <button type="button">Invite Staff Member</button>
+    <hr>
+
+    <h2>Your Branches</h2>
+
+    {% if branches %}
+        <ul>
+            {% for b in branches %}
+                <li>
+                    <strong>{{ b.name }}</strong>
+                    <a href="{% url 'invite_staff' b.id %}">
+                        <button type="button">Invite Staff</button>
+                    </a>
+
+                    <a href="{% url 'view_staff' b.id %}">
+                        <button type="button">View Staff</button>
+                    </a>
+
+                    <a href="{% url 'branch_schedule' b.id %}">
+                        <button type="button">View Schedule</button>
+                    </a>
+                </li>
+            {% endfor %}
+        </ul>
+    {% else %}
+        <p>You don't have any branches yet.</p>
+    {% endif %}
+
+    
+    <hr>
+
+    <a href="{% url 'create_branch' %}">
+        <button type="button">Create New Branch</button>
     </a>
+
+    <h2>Schedule Chat</h2>
+
+    <div style="max-width: 700px;">
+        <div id="chat-box"
+            style="border:1px solid #ccc; padding:12px; height:260px; overflow-y:auto; white-space:pre-wrap; background:#fafafa;">
+        </div>
+
+        <form id="chat-form" method="post" style="margin-top:10px; display:flex; gap:8px;">
+        {% csrf_token %}
+        <input
+            id="chat-message"
+            type="text"
+            placeholder="e.g. What do you want to know?"
+            autocomplete="off"
+            style="flex:1; padding:8px; font-size:16px;"
+        />
+            <button type="submit" style="padding:8px 14px; font-size:16px;">Send</button>
+        </form>
+    </div>
+
+    <script>
+        const chatBox = document.getElementById("chat-box");
+        const chatForm = document.getElementById("chat-form");
+        const chatInput = document.getElementById("chat-message");
+
+        function appendLine(who, text) {
+            chatBox.textContent += `${who}: ${text}\n\n`;
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        chatForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+
+        const text = chatInput.value.trim();
+        if (!text) return;
+
+        appendLine("You", text);
+        chatInput.value = "";
+
+        const csrfToken = chatForm.querySelector('input[name="csrfmiddlewaretoken"]').value;
+
+        const body = new URLSearchParams();
+        body.append("message", text);
+        body.append("csrfmiddlewaretoken", csrfToken);
+
+        try {
+            const res = await fetch("{% url 'schedule_chat_api' %}", {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: body.toString()
+        });
+            const data = await res.json();
+            appendLine("ScheduleBot", data.answer || "Something went wrong.");
+        } catch (err) {
+            appendLine("ScheduleBot", "Error contacting server.");
+        }
+        });
+    </script>
 </body>
+
 </html>

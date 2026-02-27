@@ -9,6 +9,31 @@
     <h1>Welcome to your Dashboard</h1>
     <p>Temporary dashboard for staff users.</p>
 
+    {% if messages %}
+    <ul>
+        {% for message in messages %}
+        <li>{{ message }}</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+
+
+    {% if business %}
+    <p>Branch: <strong>{{ business.name }}</strong></p>
+
+    <form method="post" action="{% url 'clock_in' business.id %}" style="display:inline;">
+        {% csrf_token %}
+        <button type="submit">Clock In</button>
+    </form>
+
+    <form method="post" action="{% url 'clock_out' business.id %}" style="display:inline;">
+        {% csrf_token %}
+        <button type="submit">Clock Out</button>
+    </form>
+    {% endif %}
+
+    <hr>
+
     <form method="post" action="{% url 'logout' %}">
         {% csrf_token %}
         <button type="submit">Log out</button>
