@@ -1,9 +1,14 @@
 from urllib import request
+
 from django.contrib import messages
 from django.contrib.auth import login, get_user_model
 from django.contrib.auth.views import PasswordChangeView
 from django.contrib.auth.decorators import login_required
+
 from django.db import transaction
+from django.db.models import F, DurationField, ExpressionWrapper, DateTimeField, Sum, Value
+from django.db.models.functions import Coalesce
+
 from django.shortcuts import render, redirect
 from django.http import HttpResponse, JsonResponse
 from django.urls import reverse_lazy
@@ -185,21 +190,6 @@ def branch_shifts_json(request, business_id):
 
     shifts = (
         WorkShift.objects.filter(business=business)
-        .select_related('user')
-        .order_by('start')
-    )
-
-    data = [shift_to_dict(shift) for shift in shifts]
-    return JsonResponse(data, safe=False)
-
-def staff_branch_shifts_json(request, business_id):
-    _, business, error_response = get_membership(request, business_id, json=True)
-
-    if error_response:
-        return error_response
-
-    shifts = (
-        WorkShift.objects.filter(business=business, user=request.user)
         .select_related('user')
         .order_by('start')
     )
@@ -527,7 +517,21 @@ def staff_status(request, business_id):
 
 # Staff-related views
 
-class FirstLoginPasswordChangeView(PasswordChangeView):
+def staff_branch_shifts_json(request, business_id):
+    _, business, error_response = get_membership(request, business_id, json=True)
+
+    if error_response:
+        return error_response
+
+    shifts = (
+        WorkShift.objects.filter(business=business, user=request.user)
+        .select_related('user')
+        .order_by('start')
+    )
+
+    data = [shift_to_dict(shift) for shift in shifts]
+    return JsonResponse(data, safe=False)
+class FirstLoginPasswordChangeView(PasswordChangeView): 
     template_name = 'dashboard/first_login_password_change.html'
     success_url = reverse_lazy('dashboard')
 
@@ -540,3 +544,75 @@ class FirstLoginPasswordChangeView(PasswordChangeView):
         ).update(must_change_password=False)
 
         return response
+
+@login_required
+def my_hours(request, business_id):
+    membership, business, error_response = get_membership(request, business_id, json=True)
+
+    if error_response:
+        return error_response
+    today = timezone.localdate()
+    tz = timezone.get_current_timezone()
+
+    week_start = today - timedelta(days=today.weekday())
+    week_end = week_start + timedelta(days=7)
+
+    month_start = today.replace(day=1)
+
+    if month_start.weekday() == 12:
+        month_end = month_start.replace(year=month_start.year + 1, month=1)
+    else:
+        month_end = month_start.replace(month=month_start.month + 1)
+
+    def start_of_day(d):
+        return timezone.make_aware(datetime.combine(d, time.min), tz)
+
+    week_start_dt = start_of_day(week_start)
+    week_end_dt = start_of_day(week_end)
+    month_start_dt = start_of_day(month_start)
+    month_end_dt = start_of_day(month_end)
+    
+    duration_expr = ExpressionWrapper(
+        F('clock_out') - F('clock_in'),
+        output_field=DateTimeField()
+    )
+
+    def total_for_range(start_dt, end_dt):
+        qs = TimeClock.objects.filter(
+            business=business,
+            user=request.user,
+            clock_out__isnull=False,  
+            clock_in__lt=end_dt,
+            clock_out__gt=start_dt,
+        )
+        return qs.aggregate(
+            total=Coalesce(
+                Sum(duration_expr),
+                Value(timedelta(0), output_field=DurationField()), 
+                output_field=DurationField(),
+            )
+        )["total"]
+
+    week_total = total_for_range(week_start_dt, week_end_dt)
+    month_total = total_for_range(month_start_dt, month_end_dt)
+
+    def hours_minutes(td):
+        seconds = int(td.total_seconds())
+        return seconds // 3600, (seconds % 3600) // 60
+    
+    week_hours, week_minutes = hours_minutes(week_total)
+    month_hours, month_minutes = hours_minutes(month_total)
+
+    return render(request, 'dashboard/my_hours.html', {
+        'business': business,
+        'week_start': week_start,
+        'week_end': week_end - timedelta(days=1),
+        'month_start': month_start,
+        'month_end': month_end - timedelta(days=1),
+        'week_hours': week_hours,
+        'week_minutes': week_minutes,
+        'month_hours': month_hours,
+        'month_minutes': month_minutes
+    })
+
+

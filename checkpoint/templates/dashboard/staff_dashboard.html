@@ -33,6 +33,10 @@
         {% csrf_token %}
         <button type="submit">Clock Out</button>
     </form>
+
+    <form method="get" action="{% url 'my_hours' business.id %}" style="display:inline;">
+        <button type="submit">View My Hours</button>
+    </form>
     {% endif %}
 
     <h2>Your Schedule</h2>

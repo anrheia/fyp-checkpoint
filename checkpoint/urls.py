@@ -22,4 +22,5 @@ urlpatterns = [
 
     #staff paths
     path("branches/<int:business_id>/schedule/shifts/staff.json", views.staff_branch_shifts_json, name="staff_branch_shifts_json"),
+    path("business/<int:business_id>/my-hours/", views.my_hours, name="my_hours"),
 ]

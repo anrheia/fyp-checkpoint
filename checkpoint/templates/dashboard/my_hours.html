@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Hours</title>
+</head>
+<body>
+    <h2>{{ business.name }} — My hours Worked</h2>
+    <section>
+        <h3>This Week</h3>
+        <p> {{ week_start }} to {{ week_end }}: {{ week_hours }}h {{ week_minutes }}</p>
+        <h3>This Month</h3>
+        <p> {{ month_start }} to {{ month_end }}: {{ month_hours }}h {{ month_minutes }}</p>
+    </section>
+
+    <section>
+    </section>
+
+    <hr>
+
+    <a href="{% url 'dashboard' %}">
+        <button type="button">Back to Dashboard</button>
+    </a>
+
+</body>
+</html>
