@@ -15,6 +15,7 @@ from datetime import datetime, timedelta, time
 from .forms import OwnerSignUpForm, InviteStaffForm, NewBranchForm, WorkShiftForm
 from .models import Business, BusinessMembership, TimeClock, WorkShift
 from .utils import (
+    get_membership,
     send_invitation_email, 
     generate_temporary_password, 
     extract_schedule_query,
@@ -184,6 +185,21 @@ def branch_shifts_json(request, business_id):
 
     shifts = (
         WorkShift.objects.filter(business=business)
+        .select_related('user')
+        .order_by('start')
+    )
+
+    data = [shift_to_dict(shift) for shift in shifts]
+    return JsonResponse(data, safe=False)
+
+def staff_branch_shifts_json(request, business_id):
+    _, business, error_response = get_membership(request, business_id, json=True)
+
+    if error_response:
+        return error_response
+
+    shifts = (
+        WorkShift.objects.filter(business=business, user=request.user)
         .select_related('user')
         .order_by('start')
     )
