@@ -28,12 +28,12 @@ jobs:
     env:
       DJANGO_SETTINGS_MODULE: myproject.settings.ci
       PYTHONUNBUFFERED: 1
-      
+
       POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
       POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
       POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
-      POSTGRES_HOST: ${{ secrets.DB_HOST }}
-      POSTGRES_PORT: ${{ secrets.DB_PORT }}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
 
     steps:
       - uses: actions/checkout@v4
