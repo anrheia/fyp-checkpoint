@@ -19,4 +19,8 @@ urlpatterns = [
     path("business/<int:business_id>/clock-in/", views.clock_in, name="clock_in"),
     path("business/<int:business_id>/clock-out/", views.clock_out, name="clock_out"),
     path("business/<int:business_id>/staff-status/", views.staff_status, name="staff_status"),
+
+    #staff paths
+    path("branches/<int:business_id>/schedule/shifts/staff.json", views.staff_branch_shifts_json, name="staff_branch_shifts_json"),
+    path("business/<int:business_id>/my-hours/", views.my_hours, name="my_hours"),
 ]

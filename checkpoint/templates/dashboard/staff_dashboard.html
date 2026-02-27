@@ -4,6 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Your Dashboard</title>
+
+    <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js"></script>
 </head>
 <body>
     <h1>Welcome to your Dashboard</h1>
@@ -30,7 +33,14 @@
         {% csrf_token %}
         <button type="submit">Clock Out</button>
     </form>
+
+    <form method="get" action="{% url 'my_hours' business.id %}" style="display:inline;">
+        <button type="submit">View My Hours</button>
+    </form>
     {% endif %}
+
+    <h2>Your Schedule</h2>
+    <div id="calendar"></div>   
 
     <hr>
 
@@ -38,5 +48,29 @@
         {% csrf_token %}
         <button type="submit">Log out</button>
     </form>
+    <script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const calendarEl = document.getElementById('calendar');
+
+        const calendar = new FullCalendar.Calendar(calendarEl, {
+            initialView: 'timeGridWeek',
+            height: 'auto',
+            nowIndicator: true,
+
+            events: "{% url 'staff_branch_shifts_json' business.id %}",
+
+            editable: false,
+            selectable: false,
+            eventStartEditable: false,
+            eventDurationEditable: false,
+
+            eventClick: function(info) {
+                info.jsEvent.preventDefault();
+            }
+        });
+
+        calendar.render();
+    });
+    </script>
 </body>
 </html>

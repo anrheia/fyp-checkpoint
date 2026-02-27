@@ -53,6 +53,24 @@ def get_owner_membership(request, business_id, *, json=False, message=None):
         return None, None, JsonResponse({"error": msg}, status=403)
     return None, None, HttpResponse(msg, status=403)
 
+def get_membership(request, business_id, *, json=False, message=None):
+    membership = (BusinessMembership.objects.filter(
+            user=request.user, 
+            role=BusinessMembership.EMPLOYEE,
+            business_id=business_id
+        )
+        .select_related('business')
+        .first()
+    )
+
+    if membership:
+        return membership, membership.business, None
+    
+    msg = message or "You do not have permission to access this business."
+    if json:
+        return None, None, JsonResponse({"error": msg}, status=403)
+    return None, None, HttpResponse(msg, status=403)
+
 
 def user_display_name(user):
     full_name = f"{user.first_name} {user.last_name}".strip()
