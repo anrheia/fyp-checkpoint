@@ -18,29 +18,89 @@
 
     <h2>Your Branches</h2>
 
-    {% if branches %}
+        {% if branches_with_status %}
         <ul>
-            {% for b in branches %}
+            {% for item in branches_with_status %}
                 <li>
-                    <strong>{{ b.name }}</strong>
-                    <a href="{% url 'invite_staff' b.id %}">
+                    <h3>{{ item.branch.name }}</h3>
+
+                    <a href="{% url 'invite_staff' item.branch.id %}">
                         <button type="button">Invite Staff</button>
                     </a>
 
-                    <a href="{% url 'view_staff' b.id %}">
+                    <a href="{% url 'view_staff' item.branch.id %}">
                         <button type="button">View Staff</button>
                     </a>
 
-                    <a href="{% url 'branch_schedule' b.id %}">
+                    <a href="{% url 'branch_schedule' item.branch.id %}">
                         <button type="button">View Schedule</button>
                     </a>
+
+                    <h4>Live Staff Activity</h4>
+
+                    <table border="1">
+                        <tr>
+                            <th>Status</th>
+                            <th>Staff</th>
+                            <th>Details</th>
+                        </tr>
+
+                        <!-- IN -->
+                        {% for s in item.in_staff %}
+                        <tr>
+                            <td>IN</td>
+                            <td>{{ s.user.username }}</td>
+                            <td>Clocked in at {{ s.clock_in|time:"H:i" }}</td>
+                        </tr>
+                        {% endfor %}
+
+                        <!-- LATE -->
+                        {% for s in item.late_staff %}
+                        <tr>
+                            <td>LATE</td>
+                            <td>{{ s.user.username }}</td>
+                            <td>
+                                {% if s.shift %}
+                                    Shift started {{ s.shift.start|time:"H:i" }}
+                                {% else %}
+                                    No shift found
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+
+                        <!-- OUT -->
+                        {% for s in item.out_staff %}
+                        <tr>
+                            <td>OUT</td>
+                            <td>{{ s.user.username }}</td>
+                            <td>
+                                {% if s.shift %}
+                                    Scheduled @ {{ s.shift.start|time:"H:i" }}
+                                {% elif s.next_shift %}
+                                    Scheduled @ {{ s.next_shift.start|time:"H:i" }}
+                                {% else %}
+                                    Not scheduled today
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+
+                        {% if not item.in_staff and not item.late_staff and not item.out_staff %}
+                        <tr>
+                            <td colspan="3">No staff found</td>
+                        </tr>
+                        {% endif %}
+                    </table>
+
+                    <hr>
+
                 </li>
             {% endfor %}
         </ul>
     {% else %}
         <p>You don't have any branches yet.</p>
     {% endif %}
-
     
     <hr>
 

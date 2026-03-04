@@ -1,12 +1,13 @@
 from django.conf import settings
 from django.core.mail import send_mail
+from django.utils import timezone 
 from django.utils.crypto import get_random_string
 from django.http import JsonResponse, HttpResponse
 
 import os, json, re
-from datetime import timedelta
+from datetime import datetime, time, timedelta
 from openai import OpenAI
-from .models import BusinessMembership
+from .models import BusinessMembership, WorkShift, TimeClock
 
 WEEKDAY_MAP = {
     "monday": 0,
@@ -71,7 +72,6 @@ def get_membership(request, business_id, *, json=False, message=None):
         return None, None, JsonResponse({"error": msg}, status=403)
     return None, None, HttpResponse(msg, status=403)
 
-
 def user_display_name(user):
     full_name = f"{user.first_name} {user.last_name}".strip()
     return full_name if full_name else user.username
@@ -86,13 +86,91 @@ def shift_to_dict(shift):
         "notes": shift.notes or "",
     }
 
-
 def _get_client():
     global _client
     if _client is None:
         _client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
     return _client
 
+def compute_staff_status(business, minutes=15):
+    now = timezone.localtime(timezone.now())
+    today = timezone.localdate()
+    tz = timezone.get_current_timezone()
+
+    day_start = timezone.make_aware(datetime.combine(today, time.min), tz)
+    day_end = timezone.make_aware(datetime.combine(today, time.max), tz)
+
+    grace_period = now - timedelta(minutes=minutes)
+
+    staff_memberships = BusinessMembership.objects.filter(
+        business=business,
+        role=BusinessMembership.EMPLOYEE
+    ).select_related("user").order_by("user__username")
+
+    staff_users = [m.user for m in staff_memberships]
+
+    shifts_recent = WorkShift.objects.filter(
+        business=business,
+        user__in=staff_users,
+        start__lte=now,
+        end__gte=grace_period
+    ).select_related("user").order_by("start")
+
+    shifts_by_user = {}
+    for shift in shifts_recent:
+        shifts_by_user.setdefault(shift.user_id, []).append(shift)
+
+    next_shifts = WorkShift.objects.filter(
+        business=business,
+        user__in=staff_users,
+        start__gt=now,
+        start__gte=day_start,
+        start__lte=day_end
+    ).select_related("user").order_by("start")
+
+    next_shift_by_user = {}
+    for shift in next_shifts:
+        if shift.user_id not in next_shift_by_user:
+            next_shift_by_user[shift.user_id] = shift
+
+    open_clocks = TimeClock.objects.filter(
+        business=business,
+        user__in=staff_users,
+        clock_out__isnull=True
+    ).select_related("user", "shift")
+
+    clock_by_user = {tc.user_id: tc for tc in open_clocks}
+
+    in_staff, late_staff, out_staff = [], [], []
+
+    for user in staff_users:
+        open_tc = clock_by_user.get(user.id)
+        if open_tc:
+            in_staff.append({"user": user, "clock_in": open_tc.clock_in})
+            continue
+
+        todays_recent = shifts_by_user.get(user.id, [])
+        active_shift = None
+        for shift in todays_recent:
+            if shift.start <= now <= shift.end:
+                active_shift = shift
+                break
+
+        if active_shift and now > (active_shift.start + timedelta(minutes=minutes)):
+            late_staff.append({"user": user, "shift": active_shift})
+        else:
+            out_staff.append({
+                "user": user,
+                "shift": active_shift,                 
+                "next_shift": next_shift_by_user.get(user.id)  
+            })
+
+    return {
+        "in_staff": in_staff,
+        "late_staff": late_staff,
+        "out_staff": out_staff,
+        "now": now
+    }
 # Utility function to find the next date for a given weekday, used in schedule query parsing.
 
 def next_weekday(start_date, target_weekday, *, include_today=False):
