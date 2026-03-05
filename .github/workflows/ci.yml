@@ -5,6 +5,16 @@ on:
     branches: [ main ]
   push:
     branches: [ main ]
+  workflow_call:                         # ← add this
+    secrets:
+      POSTGRES_DB:
+        required: true
+      POSTGRES_USER:
+        required: true
+      POSTGRES_PASSWORD:
+        required: true
+      DJANGO_SECRET_KEY:
+        required: true
 
 jobs:
   test:

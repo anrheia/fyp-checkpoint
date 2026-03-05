@@ -1,5 +1,6 @@
 .env
 .env.docker
+.dockerignore
 .venv
 __pycache__/
 
