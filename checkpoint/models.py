@@ -13,16 +13,24 @@ class Business(models.Model):
     
 class BusinessMembership(models.Model):
     OWNER = 'owner'
+    SUPERVISOR = 'supervisor'
     EMPLOYEE = 'employee'
 
     role_choices = [
         (OWNER, 'Owner'),
+        (SUPERVISOR, 'Supervisor'),
         (EMPLOYEE, 'Employee'),
     ]
 
+    role_ranks = {
+        OWNER: 2,
+        SUPERVISOR: 1,
+        EMPLOYEE: 0,
+    }
+
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     business = models.ForeignKey(Business, on_delete=models.CASCADE)
-    role = models.CharField(max_length=20, choices=role_choices)
+    role = models.CharField(max_length=20, choices=role_choices ,default=EMPLOYEE)
 
     must_change_password = models.BooleanField(default=False)
 
@@ -30,6 +38,27 @@ class BusinessMembership(models.Model):
         constraints = [
             models.UniqueConstraint(fields=['user', 'business'], name='unique_membership')
         ]
+
+    def __str__(self):
+        return f"{self.user.username} - {self.business.name} ({self.role})"
+    
+    def has_min_role(self, role):
+        return self.role_ranks.get(self.role, -1) >= self.role_ranks.get(role, 999)
+    
+    @property
+    def is_owner(self):
+        return self.role == self.OWNER
+    
+    @property
+    def is_supervisor(self):
+        return self.role == self.SUPERVISOR
+    
+    @property
+    def is_staff_or_above(self):
+        return self.role in [self.EMPLOYEE, self.SUPERVISOR, self.OWNER]
+    
+    def is_supervisor_or_above(self):
+        return self.role in [self.SUPERVISOR, self.OWNER]   
 
 class WorkShift(models.Model):
     business = models.ForeignKey('Business', on_delete=models.CASCADE, related_name='shifts')

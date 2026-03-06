@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Supervisor Dashboard</title>
+
+    <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js"></script>
+</head>
+<body>
+    <h1>Supervisor Dashboard</h1>
+
+    {% if messages %}
+    <ul>
+        {% for message in messages %}
+        <li>{{ message }}</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+
+    {% if business %}
+    <p>Branch: <strong>{{ business.name }}</strong></p>
+
+    <form method="post" action="{% url 'clock_in' business.id %}" style="display:inline;">
+        {% csrf_token %}
+        <button type="submit">Clock In</button>
+    </form>
+
+    <form method="post" action="{% url 'clock_out' business.id %}" style="display:inline;">
+        {% csrf_token %}
+        <button type="submit">Clock Out</button>
+    </form>
+
+    <form method="get" action="{% url 'my_hours' business.id %}" style="display:inline;">
+        <button type="submit">View My Hours</button>
+    </form>
+
+    <hr>
+
+    <h2>Staff Status</h2>
+
+    <h3>Clocked In</h3>
+    {% if in_staff %}
+    <ul>
+        {% for entry in in_staff %}
+        <li>{{ entry.user.get_full_name|default:entry.user.username }} — since {{ entry.clock_in|time:"H:i" }}</li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <p>No staff currently clocked in.</p>
+    {% endif %}
+
+    <h3>Late (not clocked in)</h3>
+    {% if late_staff %}
+    <ul>
+        {% for entry in late_staff %}
+        <li>{{ entry.user.get_full_name|default:entry.user.username }} — shift started {{ entry.shift.start|time:"H:i" }}</li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <p>No late staff.</p>
+    {% endif %}
+
+    <h3>Not Scheduled / Off</h3>
+    {% if out_staff %}
+    <ul>
+        {% for entry in out_staff %}
+        <li>
+            {{ entry.user.get_full_name|default:entry.user.username }}
+            {% if entry.next_shift %}
+            — next shift: {{ entry.next_shift.start|time:"H:i" }}
+            {% endif %}
+        </li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <p>All staff are accounted for.</p>
+    {% endif %}
+
+    <hr>
+
+    <h2>Manage</h2>
+    <a href="{% url 'branch_schedule' business.id %}"><button>View / Edit Schedule</button></a>
+    <a href="{% url 'view_staff' business.id %}"><button>View Staff</button></a>
+    <a href="{% url 'invite_staff' business.id %}"><button>Invite Staff</button></a>
+
+    <hr>
+
+    <h2>Branch Schedule</h2>
+    <div id="calendar"></div>
+
+    {% endif %}
+
+    <hr>
+
+    <form method="post" action="{% url 'logout' %}">
+        {% csrf_token %}
+        <button type="submit">Log out</button>
+    </form>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const calendarEl = document.getElementById('calendar');
+
+        const calendar = new FullCalendar.Calendar(calendarEl, {
+            initialView: 'timeGridWeek',
+            height: 'auto',
+            nowIndicator: true,
+            events: "{% url 'branch_shifts_json' business.id %}",
+            editable: false,
+            selectable: false,
+            eventStartEditable: false,
+            eventDurationEditable: false,
+            eventClick: function(info) {
+                info.jsEvent.preventDefault();
+            }
+        });
+
+        calendar.render();
+    });
+    </script>
+</body>
+</html>

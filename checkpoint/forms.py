@@ -2,7 +2,7 @@ from django import forms
 from django.contrib.auth import get_user_model
 from django.contrib.auth.forms import UserCreationForm
 
-from .models import Business, WorkShift
+from .models import Business, BusinessMembership, WorkShift
 
 User = get_user_model()
 
@@ -28,6 +28,14 @@ class NewBranchForm(forms.ModelForm):
         fields = ('name',)
 
 class InviteStaffForm(forms.ModelForm):
+    role = forms.ChoiceField(
+        choices=[
+            (BusinessMembership.EMPLOYEE, 'Staff'),
+            (BusinessMembership.SUPERVISOR, 'Supervisor'),
+        ],
+        initial=BusinessMembership.EMPLOYEE,
+        required=True,
+    )
     class Meta:
         model = User
         fields = ('first_name', 'last_name', 'username', 'email')
