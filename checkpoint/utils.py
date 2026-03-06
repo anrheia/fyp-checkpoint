@@ -123,7 +123,7 @@ def compute_staff_status(business, minutes=15):
 
     staff_memberships = BusinessMembership.objects.filter(
         business=business,
-        role__in=[BusinessMembership.EMPLOYEE, BusinessMembership.SUPERVISOR, BusinessMembership.OWNER]
+        role__in=[BusinessMembership.EMPLOYEE, BusinessMembership.SUPERVISOR]
     ).select_related("user").order_by("user__username")
 
     staff_users = [m.user for m in staff_memberships]
