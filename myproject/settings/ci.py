@@ -10,8 +10,6 @@ SECURE_HSTS_INCLUDE_SUBDOMAINS = False
 SECURE_HSTS_PRELOAD = False
 SECURE_PROXY_SSL_HEADER = None
 
-EMAIL_BACKEND = 'django.core.mail.backends.locmem.EmailBackend' 
-
 PASSWORD_HASHERS = [
     'django.contrib.auth.hashers.MD5PasswordHasher',
 ]

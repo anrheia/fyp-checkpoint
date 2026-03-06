@@ -1,9 +1,14 @@
 from urllib import request
+
 from django.contrib import messages
 from django.contrib.auth import login, get_user_model
 from django.contrib.auth.views import PasswordChangeView
 from django.contrib.auth.decorators import login_required
+
 from django.db import transaction
+from django.db.models import F, DurationField, ExpressionWrapper, DateTimeField, Sum, Value
+from django.db.models.functions import Coalesce, Greatest, Least
+
 from django.shortcuts import render, redirect
 from django.http import HttpResponse, JsonResponse
 from django.urls import reverse_lazy
@@ -15,13 +20,15 @@ from datetime import datetime, timedelta, time
 from .forms import OwnerSignUpForm, InviteStaffForm, NewBranchForm, WorkShiftForm
 from .models import Business, BusinessMembership, TimeClock, WorkShift
 from .utils import (
+    get_membership,
     send_invitation_email, 
     generate_temporary_password, 
     extract_schedule_query,
     extract_weekday_request,
     next_weekday,
     get_owner_membership,
-    shift_to_dict
+    shift_to_dict,
+    compute_staff_status
     )
 from datetime import datetime, time
 # Create your views here.
@@ -50,24 +57,37 @@ def owner_signup(request):
     return render(request, 'registration/owner_signup.html', {'form': form})
 
 @login_required
+@login_required
 def dashboard(request):
-    is_owner = BusinessMembership.objects.filter(
+    owner_memberships = BusinessMembership.objects.filter(
         user=request.user,
         role=BusinessMembership.OWNER
-    ).select_related('business')
+    ).select_related("business")
 
-    if is_owner.exists():
-        branches = [m.business for m in is_owner]
-        return render(request, 'dashboard/owner_dashboard.html', {
-            'branches': branches
+    # OWNER DASHBOARD
+    if owner_memberships.exists():
+        branches = [m.business for m in owner_memberships]
+
+        branches_with_status = []
+        for b in branches:
+            status = compute_staff_status(b)
+            branches_with_status.append({
+                "branch": b,
+                **status
             })
-    
-    staff_memberships = BusinessMembership.objects.filter(
+
+        return render(request, "dashboard/owner_dashboard.html", {
+            "branches_with_status": branches_with_status
+        })
+
+    # STAFF DASHBOARD
+    staff_membership = BusinessMembership.objects.filter(
         user=request.user,
         role=BusinessMembership.EMPLOYEE
-    ).select_related('business').first()
-    return render(request, 'dashboard/staff_dashboard.html', {
-        'business': staff_memberships.business if staff_memberships else None
+    ).select_related("business").first()
+
+    return render(request, "dashboard/staff_dashboard.html", {
+        "business": staff_membership.business if staff_membership else None
     })
 
 # Owner-related views
@@ -432,86 +452,22 @@ def clock_out(request, business_id):
     messages.success(request, "Clocked out successfully.")
     return redirect("dashboard")
 
-def staff_status(request, business_id):
-    _, business, error_response = get_owner_membership(request, business_id, json=True)
+# Staff-related views
+def staff_branch_shifts_json(request, business_id):
+    _, business, error_response = get_membership(request, business_id, json=True)
+
     if error_response:
         return error_response
-    
-    now = timezone.localtime(timezone.now())
-    today = timezone.localdate()
 
-    minutes = 15
-    grace_period = now - timedelta(minutes=minutes)
+    shifts = (
+        WorkShift.objects.filter(business=business, user=request.user)
+        .select_related('user')
+        .order_by('start')
+    )
 
-    tz = timezone.get_current_timezone()
-    day_start = timezone.make_aware(datetime.combine(today, time.min), tz)
-    day_end = timezone.make_aware(datetime.combine(today, time.max), tz)
-
-    staff_memberships = BusinessMembership.objects.filter(
-        business=business,
-        role=BusinessMembership.EMPLOYEE
-    ).select_related('user').order_by('user__username')
-    staff_users = [m.user for m in staff_memberships]
-
-    shifts = WorkShift.objects.filter(
-        business=business,
-        user__in=staff_users,
-        start__lte=now,
-        end__gte=grace_period
-    ).select_related('user').order_by('start')
-
-    shifts_by_user = {}
-    for shift in shifts:
-        shifts_by_user.setdefault(shift.user_id, []).append(shift)
-
-    open_clocks = TimeClock.objects.filter(
-        business=business,
-        user__in=staff_users,
-        clock_out__isnull=True
-    ).select_related('user', 'shift')
-
-    clock_by_user = {tc.user_id: tc for tc in open_clocks}
-
-    in_staff, late_staff, out_staff = [], [], []
-
-    for user in staff_users:
-        open_tc = clock_by_user.get(user.id)
-        if open_tc:
-            in_staff.append({
-                "user": user,
-                "clock_in": open_tc.clock_in
-            })
-            continue
-
-        todays = shifts_by_user.get(user.id, [])
-        active_shift = None
-        for shift in todays:
-            if shift.start <= now <= shift.end:
-                active_shift = shift
-                break
-
-        if active_shift and now > (active_shift.start + minutes):
-            late_staff.append({
-                "user": user,
-                "shift": active_shift
-            })
-        else:
-            out_staff.append({
-                "user": user,
-                "shift": active_shift
-            })
-
-        return render(request, 'dashboard/staff_status.html', {
-            "business": business,
-            "in_staff": in_staff,
-            "late_staff": late_staff,
-            "out_staff": out_staff
-        })
-        
-
-# Staff-related views
-
-class FirstLoginPasswordChangeView(PasswordChangeView):
+    data = [shift_to_dict(shift) for shift in shifts]
+    return JsonResponse(data, safe=False)
+class FirstLoginPasswordChangeView(PasswordChangeView): 
     template_name = 'dashboard/first_login_password_change.html'
     success_url = reverse_lazy('dashboard')
 
@@ -524,3 +480,110 @@ class FirstLoginPasswordChangeView(PasswordChangeView):
         ).update(must_change_password=False)
 
         return response
+
+@login_required
+def my_hours(request, business_id):
+    membership, business, error_response = get_membership(request, business_id, json=True)
+    if error_response:
+        return error_response
+
+    today = timezone.localdate()
+    tz = timezone.get_current_timezone()
+
+    week_start = today - timedelta(days=today.weekday())
+    week_end = week_start + timedelta(days=7)
+
+    month_start = today.replace(day=1)
+    if month_start.month == 12:
+        month_end = month_start.replace(year=month_start.year + 1, month=1)
+    else:
+        month_end = month_start.replace(month=month_start.month + 1)
+
+    def start_of_day(d):
+        return timezone.make_aware(datetime.combine(d, time.min), tz)
+
+    week_start_dt = start_of_day(week_start)
+    week_end_dt = start_of_day(week_end)
+    month_start_dt = start_of_day(month_start)
+    month_end_dt = start_of_day(month_end)
+
+    duration_expr = ExpressionWrapper(
+        F('clock_out') - F('clock_in'),
+        output_field=DurationField()
+    )
+
+    def worked_total_for_range(start_dt, end_dt):
+        qs = TimeClock.objects.filter(
+            business=business,
+            user=request.user,
+            clock_out__isnull=False,
+            clock_in__lt=end_dt,
+            clock_out__gt=start_dt,
+        )
+        return qs.aggregate(
+            total=Coalesce(
+                Sum(duration_expr),
+                Value(timedelta(0)),
+                output_field=DurationField(),
+            )
+        )["total"]
+
+    week_worked = worked_total_for_range(week_start_dt, week_end_dt)
+    month_worked = worked_total_for_range(month_start_dt, month_end_dt)
+
+    def scheduled_total_for_range(start_dt, end_dt):
+        qs = (
+            WorkShift.objects
+            .filter(
+                business=business,
+                user=request.user,
+                start__lt=end_dt,
+                end__gt=start_dt,
+            )
+            .annotate(
+                overlap=ExpressionWrapper(
+                    Least(F("end"), Value(end_dt, output_field=DateTimeField()))
+                    - Greatest(F("start"), Value(start_dt, output_field=DateTimeField())),
+                    output_field=DurationField(),
+                )
+            )
+            .filter(overlap__gt=timedelta(0))
+        )
+        return qs.aggregate(
+            total=Coalesce(
+                Sum("overlap"),
+                Value(timedelta(0)),
+                output_field=DurationField(),
+            )
+        )["total"]
+
+    week_scheduled = scheduled_total_for_range(week_start_dt, week_end_dt)
+    month_scheduled = scheduled_total_for_range(month_start_dt, month_end_dt)
+
+    def hours_minutes(td):
+        seconds = int(td.total_seconds())
+        return seconds // 3600, (seconds % 3600) // 60
+
+    week_worked_h, week_worked_m = hours_minutes(week_worked)
+    month_worked_h, month_worked_m = hours_minutes(month_worked)
+
+    week_sched_h, week_sched_m = hours_minutes(week_scheduled)
+    month_sched_h, month_sched_m = hours_minutes(month_scheduled)
+
+    return render(request, "dashboard/my_hours.html", {
+        "business": business,
+        "week_start": week_start,
+        "week_end": week_end - timedelta(days=1),
+        "month_start": month_start,
+        "month_end": month_end - timedelta(days=1),
+
+        "week_hours": week_worked_h,
+        "week_minutes": week_worked_m,
+        "month_hours": month_worked_h,
+        "month_minutes": month_worked_m,
+
+        "week_sched_hours": week_sched_h,
+        "week_sched_minutes": week_sched_m,
+        "month_sched_hours": month_sched_h,
+        "month_sched_minutes": month_sched_m,
+    })
