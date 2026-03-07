@@ -83,6 +83,6 @@ jobs:
         env:
           DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
         run: |
-          python manage.py test checkpoint.staff_tests checkpoint.supervisor_tests checkpoint.owner_tests checkpoint.scanner_tests
+          python manage.py test checkpoint.staff_tests checkpoint.supervisor_tests checkpoint.owner_tests checkpoint.qr_tests
           
 
