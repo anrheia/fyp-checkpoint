@@ -22,4 +22,8 @@ urlpatterns = [
     #staff paths
     path("branches/<int:business_id>/schedule/shifts/staff.json", views.staff_branch_shifts_json, name="staff_branch_shifts_json"),
     path("business/<int:business_id>/my-hours/", views.my_hours, name="my_hours"),
+
+    path("business/<int:business_id>/my-qr/", views.my_qr_code, name="my_qr_code"),
+    path("business/<int:business_id>/qr-scanner/", views.qr_scanner, name="qr_scanner"),
+    path("qr-scan/<uuid:token>/", views.process_qr_scan, name="process_qr_scan"),
 ]

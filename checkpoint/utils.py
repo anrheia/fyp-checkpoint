@@ -57,7 +57,6 @@ def get_owner_membership(request, business_id, *, json=False, message=None):
 def get_membership(request, business_id, *, json=False, message=None):
     membership = (BusinessMembership.objects.filter(
             user=request.user, 
-            role=BusinessMembership.EMPLOYEE,
             business_id=business_id
         )
         .select_related('business')
@@ -71,6 +70,26 @@ def get_membership(request, business_id, *, json=False, message=None):
     if json:
         return None, None, JsonResponse({"error": msg}, status=403)
     return None, None, HttpResponse(msg, status=403)
+
+def get_supervisor_membership(request, business_id, *, json=False, message=None):
+    membership = (BusinessMembership.objects.filter(
+        user=request.user, 
+        business_id=business_id, 
+        role__in=[BusinessMembership.OWNER, BusinessMembership.SUPERVISOR]
+    )
+    .select_related('business')
+    .first()
+    )
+
+    if membership:
+        return membership, membership.business, None
+    
+    msg = message or "You do not have permission to manage this business."
+    if json:
+        return None, None, JsonResponse({"error": msg}, status=403)
+    return None, None, HttpResponse(msg, status=403)
+
+
 
 def user_display_name(user):
     full_name = f"{user.first_name} {user.last_name}".strip()
@@ -104,7 +123,7 @@ def compute_staff_status(business, minutes=15):
 
     staff_memberships = BusinessMembership.objects.filter(
         business=business,
-        role=BusinessMembership.EMPLOYEE
+        role__in=[BusinessMembership.EMPLOYEE, BusinessMembership.SUPERVISOR]
     ).select_related("user").order_by("user__username")
 
     staff_users = [m.user for m in staff_memberships]
