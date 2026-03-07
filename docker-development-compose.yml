@@ -17,7 +17,7 @@ services:
   web:
     build: .
     env_file:
-      - .env.docker
+      - .env
     environment:
       DB_HOST: db
       DB_PORT: 5432

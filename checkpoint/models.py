@@ -1,7 +1,7 @@
 from django.db import models
 from django.conf import settings
 from django.utils import timezone
-
+import uuid
 # Create your models here.
 
 class Business(models.Model):
@@ -31,6 +31,7 @@ class BusinessMembership(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     business = models.ForeignKey(Business, on_delete=models.CASCADE)
     role = models.CharField(max_length=20, choices=role_choices ,default=EMPLOYEE)
+    qr_token = models.UUIDField(default=uuid.uuid4, unique=True, db_index=True, editable=False)
 
     must_change_password = models.BooleanField(default=False)
 

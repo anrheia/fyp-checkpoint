@@ -36,6 +36,10 @@
         <button type="submit">View My Hours</button>
     </form>
 
+    <form method="get" action="{% url 'qr_scanner' business.id %}" style="display:inline;">
+        <button type="submit">Clock Staff in/out</button>
+    </form>
+
     <hr>
 
     <h2>Staff Status</h2>

@@ -39,6 +39,13 @@
     </form>
     {% endif %}
 
+    {% block content %}
+        <h2>Your Clock-In QR Code</h2>
+        <p>Show this to your supervisor to clock in or out. It refreshes after each scan.</p>
+        <img src="{% url 'my_qr_code' business.id %}" alt="Your QR Code" style="max-width:300px;">
+        <p><small>Each scan generates a new code for security.</small></p>
+    {% endblock %}
+
     <h2>Your Schedule</h2>
     <div id="calendar"></div>   
 
