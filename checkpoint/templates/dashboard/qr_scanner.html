@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+<body>
+    {% block content %}
+    <h2>QR Scanner – {{ business.name }}</h2>
+
+    <div id="result-box" style="display:none; padding:1rem; margin-bottom:1rem; border-radius:6px;"></div>
+
+    <div style="max-width:400px; margin:0 auto;">
+    <video id="preview" style="width:100%; border-radius:8px;"></video>
+    </div>
+
+    <a href="{% url 'dashboard' %}">
+        <button type="button">Back to Dashboard</button>
+    </a>
+
+    <script src="https://unpkg.com/jsqr@1.4.0/dist/jsQR.js"></script>
+    <script>
+    const video = document.getElementById("preview");
+    const resultBox = document.getElementById("result-box");
+    let scanning = true;
+
+    async function startCamera() {
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+    video.srcObject = stream;
+    video.setAttribute("playsinline", true);
+    await video.play();
+    requestAnimationFrame(tick);
+    }
+
+    function tick() {
+    if (video.readyState === video.HAVE_ENOUGH_DATA) {
+        const canvas = document.createElement("canvas");
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        canvas.getContext("2d").drawImage(video, 0, 0);
+        const imageData = canvas.getContext("2d").getImageData(0, 0, canvas.width, canvas.height);
+        const code = jsQR(imageData.data, imageData.width, imageData.height);
+
+        if (code && scanning) {
+        scanning = false;
+        handleScan(code.data);
+        }
+    }
+    if (scanning) requestAnimationFrame(tick);
+    }
+
+    async function handleScan(url) {
+    const match = url.match(/\/qr-scan\/([a-f0-9\-]{36})\//);
+    if (!match) {
+        showResult("Invalid QR code.", "error");
+        setTimeout(() => { scanning = true; requestAnimationFrame(tick); }, 3000);
+        return;
+    }
+
+    const token = match[1];
+    const csrfToken = "{{ csrf_token }}";
+
+    try {
+        const resp = await fetch(`/qr-scan/${token}/`, {
+        method: "POST",
+        headers: { "X-CSRFToken": csrfToken, "Content-Type": "application/json" },
+        });
+        const data = await resp.json();
+        if (resp.ok) {
+        showResult(data.message, data.action === "clocked_in" ? "success" : "info");
+        } else {
+        showResult(data.error || "Something went wrong.", "error");
+        }
+    } catch (e) {
+        showResult("Network error.", "error");
+    }
+
+    setTimeout(() => {
+        scanning = true;
+        requestAnimationFrame(tick);
+    }, 4000);
+    }
+
+    function showResult(msg, type) {
+    const colors = { success: "#d4edda", error: "#f8d7da", info: "#d1ecf1" };
+    resultBox.style.display = "block";
+    resultBox.style.background = colors[type] || "#fff";
+    resultBox.textContent = msg;
+    }
+
+    startCamera();
+    </script>
+    {% endblock %}
+</body>
+</html>

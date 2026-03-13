@@ -21,9 +21,8 @@ class ForcePasswordChangeMiddleware:
 
             if BusinessMembership.objects.filter(
                 user=request.user,
-                role=BusinessMembership.EMPLOYEE,
                 must_change_password=True
-                ).exists():
+                ).exclude(role=BusinessMembership.OWNER).exists():
                     return redirect('password_change')
             
         return self.get_response(request)

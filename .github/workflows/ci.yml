@@ -38,7 +38,7 @@ jobs:
     env:
       DJANGO_SETTINGS_MODULE: myproject.settings.ci
       PYTHONUNBUFFERED: 1
-
+      DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
       POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
       POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
       POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
@@ -63,9 +63,17 @@ jobs:
         run: |
           python manage.py check --deploy
 
+      - name: Check for missing migrations
+        run: |
+          python manage.py makemigrations --check --dry-run
+
       - name: Run Migrations
         run: |
           python manage.py migrate --noinput
+
+      - name: Confirm Migrations fully Applied
+        run: |
+          python manage.py migrate --check
 
       - name: Collect Static Files
         run: |
@@ -75,8 +83,6 @@ jobs:
         env:
           DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
         run: |
-          python manage.py test
-          python manage.py test checkpoint.staff_tests
-          python manage.py test checkpoint.owner_tests
+          python manage.py test checkpoint.staff_tests checkpoint.supervisor_tests checkpoint.owner_tests checkpoint.qr_tests checkpoint.email_tests
           
 

@@ -14,7 +14,7 @@ from django.http import HttpResponse, JsonResponse
 from django.urls import reverse_lazy
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_protect
-from django.views.decorators.http import require_POST
+from django.views.decorators.http import require_POST, require_GET
 
 from datetime import datetime, timedelta, time
 from .forms import OwnerSignUpForm, InviteStaffForm, NewBranchForm, WorkShiftForm
@@ -27,10 +27,15 @@ from .utils import (
     extract_weekday_request,
     next_weekday,
     get_owner_membership,
+    get_supervisor_membership,
     shift_to_dict,
     compute_staff_status
     )
 from datetime import datetime, time
+
+import uuid
+import qrcode
+import io 
 # Create your views here.
 
 User = get_user_model()
@@ -57,7 +62,6 @@ def owner_signup(request):
     return render(request, 'registration/owner_signup.html', {'form': form})
 
 @login_required
-@login_required
 def dashboard(request):
     owner_memberships = BusinessMembership.objects.filter(
         user=request.user,
@@ -79,6 +83,19 @@ def dashboard(request):
         return render(request, "dashboard/owner_dashboard.html", {
             "branches_with_status": branches_with_status
         })
+    
+    # SUPERVISOR DASHBOARD
+    supervisor_membership = BusinessMembership.objects.filter(
+        user=request.user,
+        role=BusinessMembership.SUPERVISOR
+    ).select_related("business").first()
+    if supervisor_membership:
+        business = supervisor_membership.business
+        status = compute_staff_status(business)
+        return render(request, "dashboard/supervisor_dashboard.html", {
+            "business": business,
+            **status
+        })
 
     # STAFF DASHBOARD
     staff_membership = BusinessMembership.objects.filter(
@@ -94,16 +111,11 @@ def dashboard(request):
 
 @login_required
 def invite_staff(request, business_id):
-    owner_membership = BusinessMembership.objects.filter(
-        user=request.user,
-        role=BusinessMembership.OWNER,
-        business_id=business_id
-    ).select_related('business').first()
-    if not owner_membership:
-        return HttpResponse("You must be an owner to invite staff.", status=403)
+    membership, business, error_response = get_supervisor_membership(request, business_id)
+    if error_response:
+        return error_response
     
-    business = owner_membership.business
-
+    is_owner = membership.role == BusinessMembership.OWNER
     if request.method == 'POST':
         form = InviteStaffForm(request.POST)
 
@@ -116,21 +128,26 @@ def invite_staff(request, business_id):
             user.set_password(temp_password)
             user.save()
 
+            requested_role = form.cleaned_data.get("role", BusinessMembership.EMPLOYEE)
+            if not is_owner:
+                requested_role = BusinessMembership.EMPLOYEE
+
             BusinessMembership.objects.create(
                 user=user,
                 business=business,
-                role=BusinessMembership.EMPLOYEE,
+                role=requested_role,
                 must_change_password=True
             )
 
             send_invitation_email(business.name, user.email, user.username, temp_password)
-
             return redirect('dashboard')
     else:
         form = InviteStaffForm()
+
     return render(request, 'dashboard/invite_staff.html', {
         'form': form,
-        'business': business
+        'business': business,
+        'is_owner': is_owner
         })
 
 @login_required
@@ -161,24 +178,18 @@ def create_branch(request):
 
 @login_required
 def view_staff(request, business_id):
-    owner_membership = BusinessMembership.objects.filter(
-        user=request.user,
-        role=BusinessMembership.OWNER,
-        business_id=business_id
-    ).select_related('business').first()
-
-    if not owner_membership:
-        return HttpResponse("You must be an owner to view staff.", status=403)  
-    
-    business = owner_membership.business
+    membership, business, error_response = get_supervisor_membership(request, business_id)
+    if error_response:
+        return error_response
 
     staff_memberships = BusinessMembership.objects.filter(
         business=business,
-        role=BusinessMembership.EMPLOYEE
+        role__in=[BusinessMembership.EMPLOYEE, BusinessMembership.SUPERVISOR]
     ).select_related('user').order_by('user__username')
 
     return render(request, 'dashboard/view_staff.html', {
         'business': business,
+        'is_owner': membership.role == BusinessMembership.OWNER,
         'staff_memberships': staff_memberships
     })
 
@@ -186,7 +197,7 @@ def view_staff(request, business_id):
 
 @login_required
 def branch_schedule(request, business_id):
-    _, business, error_response = get_owner_membership(request, business_id, json=True)
+    _, business, error_response = get_supervisor_membership(request, business_id, json=True)
 
     if error_response:
         return error_response
@@ -197,7 +208,7 @@ def branch_schedule(request, business_id):
 
 @login_required
 def branch_shifts_json(request, business_id):
-    _, business, error_response = get_owner_membership(request, business_id, json=True)
+    _, business, error_response = get_supervisor_membership(request, business_id, json=True)
 
     if error_response:
         return error_response
@@ -213,17 +224,10 @@ def branch_shifts_json(request, business_id):
 
 @login_required
 def create_shift(request, business_id):
-    owner_membership = BusinessMembership.objects.filter(
-        user=request.user,
-        role=BusinessMembership.OWNER,
-        business_id=business_id
-    ).select_related('business').first()
-
-    if not owner_membership:
-        return HttpResponse({"error": "You do not have access to this branch."}, status=403)
+    membership, business, error_response = get_supervisor_membership(request, business_id)
+    if error_response:
+        return error_response
     
-    business = owner_membership.business
-
     form = WorkShiftForm(request.POST or None)
     form.fields["user"].queryset = User.objects.filter(
         businessmembership__business=business,
@@ -242,18 +246,12 @@ def create_shift(request, business_id):
         'business': business
     })
 
+@login_required
 def delete_shift(request, business_id, shift_id):
-    owner_membership = BusinessMembership.objects.filter(
-        user=request.user,
-        role=BusinessMembership.OWNER,
-        business_id=business_id
-    ).select_related('business').first()
-
-    if not owner_membership:
-        return HttpResponse({"error": "You do not have access to this branch."}, status=403)
+    _, business, error_response = get_supervisor_membership(request, business_id)
+    if error_response:
+        return error_response
     
-    business = owner_membership.business
-
     shift = WorkShift.objects.filter(
         id=shift_id, 
         business=business
@@ -372,16 +370,10 @@ def schedule_chat_api(request):
 @login_required
 @require_POST
 def clock_in(request, business_id):
-    membership = BusinessMembership.objects.filter(
-        user=request.user,
-        business_id=business_id
-    ).select_related("business").first()
-
-    if not membership:
-        messages.error(request, "You do not have access to this business.")
-        return redirect("dashboard")
-
-    business = membership.business
+    membership, business, error_response = get_membership(request, business_id)
+    if error_response:
+        return error_response
+    
     now = timezone.now()
 
     if TimeClock.objects.filter(
@@ -424,16 +416,10 @@ def clock_in(request, business_id):
 @login_required
 @require_POST
 def clock_out(request, business_id):
-    membership = BusinessMembership.objects.filter(
-        user=request.user,
-        business_id=business_id
-    ).select_related("business").first()
-
-    if not membership:
-        messages.error(request, "You do not have access to this business.")
-        return redirect("dashboard")
-
-    business = membership.business
+    membership, business, error_response = get_membership(request, business_id)
+    if error_response:
+        return error_response
+    
     now = timezone.now()
 
     open_clock = TimeClock.objects.filter(
@@ -480,9 +466,9 @@ class FirstLoginPasswordChangeView(PasswordChangeView):
         ).update(must_change_password=False)
 
         return response
-
 @login_required
 def my_hours(request, business_id):
+
     membership, business, error_response = get_membership(request, business_id, json=True)
     if error_response:
         return error_response
@@ -587,3 +573,93 @@ def my_hours(request, business_id):
         "month_sched_hours": month_sched_h,
         "month_sched_minutes": month_sched_m,
     })
+
+@login_required
+def my_qr_code(request, business_id):
+    membership, business, error_response = get_membership(request, business_id)
+    if error_response:
+        return error_response
+    
+    token = str(membership.qr_token)
+    scan_url = request.build_absolute_uri(f"/qr-scan/{token}/")
+
+    img = qrcode.make(scan_url)
+    buf = io.BytesIO()
+    img.save(buf, format='PNG')
+    buf.seek(0)
+    return HttpResponse(buf.getvalue(), content_type='image/png') 
+
+@login_required
+def qr_scanner(request, business_id):
+    membership, business, error_response = get_supervisor_membership(request, business_id)
+    if error_response:
+        return error_response
+    return render(request, "dashboard/qr_scanner.html", {"business": business})
+
+@require_POST
+@csrf_protect
+def process_qr_scan(request, token):
+    if not request.user.is_authenticated:
+        return JsonResponse({"error": "Authentication required."}, status=401)
+    
+    try: 
+        membership = BusinessMembership.objects.select_related("user", "business").get(
+            qr_token=token)
+    except BusinessMembership.DoesNotExist:
+        return JsonResponse({"error": "Invalid QR code or expired QR code."}, status=404)
+    
+    employee = membership.user
+    business = membership.business
+
+    scanner_membership = BusinessMembership.objects.filter(
+        user=request.user,
+        business=business,
+        role__in=[BusinessMembership.OWNER, BusinessMembership.SUPERVISOR]
+    ).first()
+    if not scanner_membership:
+        return JsonResponse({"error": "You don't have permission to clock staff in/out here."}, status=403)
+    
+    now = timezone.now()
+
+    open_clock = TimeClock.objects.filter(
+        business=business,
+        user=employee,
+        clock_out__isnull=True
+    ).order_by("-clock_in").first()
+
+    if open_clock:
+        open_clock.clock_out = now
+        open_clock.save(update_fields=["clock_out"])
+        action = "clocked_out"
+        message = f"{employee.get_full_name() or employee.username} clocked out at {timezone.localtime(now).strftime('%H:%M')}."
+    else:
+        active_shift = WorkShift.objects.filter(
+            business=business,
+            user=employee,
+            start__lte=now,
+            end__gte=now
+        ).order_by("start").first()
+
+        if not active_shift:
+            membership.qr_token = uuid.uuid4()
+            membership.save(update_fields=["qr_token"])
+            return JsonResponse({"error": f"{employee.get_full_name() or employee.username} has no active shift right now."}, status=400)
+
+        if TimeClock.objects.filter(business=business, user=employee, shift=active_shift).exists():
+            membership.qr_token = uuid.uuid4()
+            membership.save(update_fields=["qr_token"])
+            return JsonResponse({"error": f"{employee.get_full_name() or employee.username} already clocked in for this shift."}, status=400)
+
+        TimeClock.objects.create(
+            business=business,
+            user=employee,
+            shift=active_shift,
+            clock_in=now
+        )
+        action = "clocked_in"
+        message = f"{employee.get_full_name() or employee.username} clocked in at {timezone.localtime(now).strftime('%H:%M')}."
+
+    membership.qr_token = uuid.uuid4()
+    membership.save(update_fields=["qr_token"])
+
+    return JsonResponse({"action": action, "message": message})

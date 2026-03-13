@@ -2,7 +2,8 @@ from .base import *
 
 DEBUG = False
 
-ALLOWED_HOSTS = ['localhost', '127.0.0.1', 'testserver']
+ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
+
 
 SECURE_SSL_REDIRECT = False
 SECURE_HSTS_SECONDS = 0
