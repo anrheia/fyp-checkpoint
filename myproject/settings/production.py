@@ -35,14 +35,6 @@ STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
-EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
-#EMAIL_HOST = os.getenv('EMAIL_HOST', 'smtp.gmail.com')
-#EMAIL_PORT = int(os.getenv('EMAIL_PORT', 587))
-#EMAIL_USE_TLS = True
-#EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')
-#EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
-#DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'no-reply@example.com')
-
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
@@ -63,3 +55,5 @@ LOGGING = {
         },
     },
 }
+
+EMAIL_BACKEND = os.environ.get('EMAIL_BACKEND', 'django.core.mail.backends.console.EmailBackend')
