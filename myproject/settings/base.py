@@ -134,5 +134,11 @@ LOGIN_REDIRECT_URL = 'dashboard'
 LOGOUT_REDIRECT_URL = 'home'
 
 # For development, can use console email backend.
-EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
-DEFAULT_FROM_EMAIL = 'no-reply@example.com'
+EMAIL_BACKEND = os.environ.get(
+    'EMAIL_BACKEND', 
+    'django.core.mail.backends.console.EmailBackend'
+    )
+
+SENDGRID_API_KEY = os.getenv('SENDGRID_API_KEY', '')
+SENDGRID_SANDBOX_MODE_IN_DEBUG = False
+DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', '')
