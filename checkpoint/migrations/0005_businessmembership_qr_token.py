@@ -3,6 +3,11 @@
 import uuid
 from django.db import migrations, models
 
+def populate_qr_tokens(apps, schema_editor):
+    BusinessMembership = apps.get_model('checkpoint', 'BusinessMembership')
+    for membership in BusinessMembership.objects.all():
+        membership.qr_token = uuid.uuid4()
+        membership.save()
 
 class Migration(migrations.Migration):
 
@@ -14,6 +19,12 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='businessmembership',
             name='qr_token',
-            field=models.UUIDField(blank=True, db_index=True, default=uuid.uuid4, editable=False, null=True, unique=True),
+            field=models.UUIDField(default=uuid.uuid4, editable=False),
+        ),
+        migrations.RunPython(populate_qr_tokens, migrations.RunPython.noop),
+        migrations.AlterField(
+            model_name='businessmembership',
+            name='qr_token',
+            field=models.UUIDField(default=uuid.uuid4, unique=True, db_index=True, editable=False),
         ),
     ]
