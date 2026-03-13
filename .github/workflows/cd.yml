@@ -20,9 +20,9 @@ jobs:
           username: root
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            mkdir -p /app
-            echo "${{ secrets.ENV_DOCKER }}" > /app/.env.docker
-            chmod 600 /app/.env.docker
+            mkdir -p /app/fyp-checkpoint
+            echo "${{ secrets.ENV_DOCKER }}" > /app/fyp-checkpoint/.env.docker
+            chmod 600 /app/fyp-checkpoint/.env.docker
 
       - name: Deploy
         uses: appleboy/ssh-action@v1.0.0
@@ -31,10 +31,14 @@ jobs:
           username: root
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            cd /app
+            if [ ! -d "/app/fyp-checkpoint/.git" ]; then
+              git clone git@github.com:${{ github.repository }}.git /app/fyp-checkpoint
+            fi
+            cd /app/fyp-checkpoint
             git pull origin main
+            cp .env.docker .env
             docker-compose build
-            docker-compose exec -T web python manage.py migrate --noinput || exit 1
             docker-compose up -d
+            docker-compose exec -T web python manage.py migrate --noinput || exit 1
             docker-compose exec -T web python manage.py collectstatic --noinput
             docker image prune -f
