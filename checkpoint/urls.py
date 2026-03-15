@@ -26,4 +26,6 @@ urlpatterns = [
     path("business/<int:business_id>/my-qr/", views.my_qr_code, name="my_qr_code"),
     path("business/<int:business_id>/qr-scanner/", views.qr_scanner, name="qr_scanner"),
     path("qr-scan/<uuid:token>/", views.process_qr_scan, name="process_qr_scan"),
+
+    path('business/<int:business_id>/staff/<int:membership_id>/', views.staff_detail, name='staff_detail'),
 ]

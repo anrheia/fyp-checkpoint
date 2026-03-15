@@ -1,0 +1,15 @@
+{% block content %}
+<h2>
+  {{ target_membership.user.get_full_name|default:target_membership.user.username }}
+  <span class="badge">{{ target_membership.get_role_display }}</span>
+</h2>
+<p>@ {{ business.name }}</p>
+
+<form method="post">
+  {% csrf_token %}
+  {{ form.as_p }}
+  <button type="submit">Save Changes</button>
+</form>
+
+<a href="{% url 'view_staff' business.id %}">← Back to staff list</a>
+{% endblock %}
