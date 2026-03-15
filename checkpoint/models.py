@@ -60,6 +60,18 @@ class BusinessMembership(models.Model):
     
     def is_supervisor_or_above(self):
         return self.role in [self.SUPERVISOR, self.OWNER]   
+    
+class StaffProfile(models.Model):
+    membership = models.OneToOneField(
+        BusinessMembership,
+        on_delete=models.CASCADE,
+        related_name='profile'
+    )
+    phone_number = models.CharField(max_length=20, blank=True)
+    supervisor_notes = models.TextField(blank=True)
+
+    def __str__(self):
+        return f"Profile for {self.membership.user.username} @ {self.membership.business.name}"
 
 class WorkShift(models.Model):
     business = models.ForeignKey('Business', on_delete=models.CASCADE, related_name='shifts')

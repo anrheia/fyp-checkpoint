@@ -2,7 +2,7 @@ from django import forms
 from django.contrib.auth import get_user_model
 from django.contrib.auth.forms import UserCreationForm
 
-from .models import Business, BusinessMembership, WorkShift
+from .models import Business, BusinessMembership, WorkShift, StaffProfile
 
 User = get_user_model()
 
@@ -61,4 +61,24 @@ class WorkShiftForm(forms.ModelForm):
             'end': forms.DateTimeInput(attrs={'type': 'datetime-local'}),
         }
 
-        
+class StaffProfileForm(forms.ModelForm):
+    first_name = forms.CharField(required=False)
+    last_name = forms.CharField(required=False)
+    email = forms.EmailField(required=False)
+
+    class Meta:
+        model = StaffProfile
+        fields = ('phone_number', 'supervisor_notes')
+
+    def __init__(self, *args, user=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        if user:
+            self.fields['first_name'].initial = user.first_name
+            self.fields['last_name'].initial = user.last_name
+            self.fields['email'].initial = user.email
+
+    def save_user_fields(self, user):
+        user.first_name = self.cleaned_data.get('first_name', user.first_name)
+        user.last_name = self.cleaned_data.get('last_name', user.last_name)
+        user.email = self.cleaned_data.get('email', user.email)
+        user.save(update_fields=['first_name', 'last_name', 'email'])

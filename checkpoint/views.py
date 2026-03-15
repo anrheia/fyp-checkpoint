@@ -17,8 +17,13 @@ from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.http import require_POST, require_GET
 
 from datetime import datetime, timedelta, time
-from .forms import OwnerSignUpForm, InviteStaffForm, NewBranchForm, WorkShiftForm
-from .models import Business, BusinessMembership, TimeClock, WorkShift
+from .forms import (
+    OwnerSignUpForm, 
+    InviteStaffForm, 
+    NewBranchForm, 
+    WorkShiftForm, 
+    StaffProfileForm)
+from .models import Business, BusinessMembership, TimeClock, WorkShift, StaffProfile
 from .utils import (
     get_membership,
     send_invitation_email, 
@@ -663,3 +668,41 @@ def process_qr_scan(request, token):
     membership.save(update_fields=["qr_token"])
 
     return JsonResponse({"action": action, "message": message})
+
+@login_required
+def staff_detail(request, business_id, membership_id):
+    manager_membership, business, error_response = get_supervisor_membership(request, business_id)
+    if error_response:
+        return error_response
+
+    target_membership = BusinessMembership.objects.filter(
+        id=membership_id,
+        business=business,
+        role__in=[BusinessMembership.EMPLOYEE, BusinessMembership.SUPERVISOR]
+    ).select_related('user').first()
+
+    if not target_membership:
+        return HttpResponse("Staff member not found.", status=404)
+
+    if manager_membership.role == BusinessMembership.SUPERVISOR:
+        if target_membership.role != BusinessMembership.EMPLOYEE:
+            return HttpResponse("You don't have permission to view this profile.", status=403)
+
+    profile, _ = StaffProfile.objects.get_or_create(membership=target_membership)
+
+    if request.method == 'POST':
+        form = StaffProfileForm(request.POST, instance=profile, user=target_membership.user)
+        if form.is_valid():
+            form.save()
+            form.save_user_fields(target_membership.user)
+            messages.success(request, "Staff profile updated.")
+            return redirect('view_staff', business_id=business.id)
+    else:
+        form = StaffProfileForm(instance=profile, user=target_membership.user)
+
+    return render(request, 'dashboard/staff_detail.html', {
+        'form': form,
+        'target_membership': target_membership,
+        'business': business,
+        'is_owner': manager_membership.role == BusinessMembership.OWNER,
+    })

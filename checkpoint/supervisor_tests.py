@@ -1,12 +1,12 @@
 from datetime import datetime, timedelta
 
-from django.test import TestCase
+from django.test import TestCase, Client
 from django.test.utils import override_settings
 from django.urls import reverse
 from django.utils import timezone
 from django.contrib.auth import get_user_model
 
-from .models import Business, BusinessMembership, WorkShift, TimeClock
+from .models import Business, BusinessMembership, WorkShift, TimeClock, StaffProfile
 
 User = get_user_model()
 
@@ -248,3 +248,54 @@ class SupervisorAccessTest(TestCase):
             user=self.supervisor,
             clock_out__isnull=True
         ).exists())
+
+class StaffDetailViewTests(TestCase):
+
+    def setUp(self):
+        self.client = Client()
+
+        self.business = Business.objects.create(name="Test Branch")
+
+        # Supervisor
+        self.supervisor = User.objects.create_user(
+            username="supervisor1", password="pass1234", email="sup@test.com"
+        )
+        self.supervisor_membership = BusinessMembership.objects.create(
+            user=self.supervisor, business=self.business, role=BusinessMembership.SUPERVISOR
+        )
+
+        # Employee
+        self.employee = User.objects.create_user(
+            username="employee1", password="pass1234",
+            email="emp@test.com", first_name="Jane", last_name="Doe"
+        )
+        self.employee_membership = BusinessMembership.objects.create(
+            user=self.employee, business=self.business, role=BusinessMembership.EMPLOYEE
+        )
+
+        self.url = reverse("staff_detail", args=[self.business.id, self.employee_membership.id])
+
+    def test_staff_detail_page_loads_for_supervisor(self):
+        self.client.login(username="supervisor1", password="pass1234")
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Jane")
+        self.assertContains(response, "emp@test.com")
+
+    def test_staff_detail_updates_profile_fields(self):
+        self.client.login(username="supervisor1", password="pass1234")
+        response = self.client.post(self.url, {
+            "first_name": "Jane",
+            "last_name": "Doe",
+            "email": "emp@test.com",
+            "phone_number": "0871234567",
+            "supervisor_notes": "Very reliable, always on time.",
+        })
+        self.assertRedirects(response, reverse("view_staff", args=[self.business.id]))
+        profile = StaffProfile.objects.get(membership=self.employee_membership)
+        self.assertEqual(profile.phone_number, "0871234567")
+        self.assertEqual(profile.supervisor_notes, "Very reliable, always on time.")
+
+    def test_unauthenticated_user_cannot_access_staff_detail(self):
+        response = self.client.get(self.url)
+        self.assertRedirects(response, f"/accounts/login/?next={self.url}")
