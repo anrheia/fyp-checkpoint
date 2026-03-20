@@ -16,9 +16,16 @@
 
     <hr>
 
+    {% if messages %}
+        {% for message in messages %}
+            <p><strong>{{ message }}</strong></p>
+        {% endfor %}
+    {% endif %}
+ 
     <form method="post">
         {% csrf_token %}
         {{ form.as_p }}
         <button type="submit">Create Shift</button>
+    </form>
 </body>
 </html>

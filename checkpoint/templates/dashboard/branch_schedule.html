@@ -15,9 +15,16 @@
         <a href="{% url 'dashboard' %}">
             <button type="button">Back to Dashboard</button>
         </a>
-
+ 
         <a href="{% url 'create_shift' business.id %}">
             <button type="button">Create New Shift</button>
+        </a>
+ 
+        <a href="{% url 'pending_shift_notifications' business.id %}">
+            <button type="button">
+                Pending Notifications
+                {% if pending_count %}({{ pending_count }}){% endif %}
+            </button>
         </a>
     </p>
 

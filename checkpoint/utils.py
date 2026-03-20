@@ -36,6 +36,31 @@ def send_invitation_email(business_name, email, username, temp_password):
     recipient_list = [email]
     send_mail(subject, message, from_email, recipient_list, fail_silently=False)
 
+def send_shift_batch_email(user, business_name, shifts):
+    lines = "\n".join(
+        f"  • {start.strftime('%A %d %b %Y')}  {start.strftime('%H:%M')}-{end.strftime('%H:%M')}"
+        for start, end in shifts
+    )
+    subject = f"Your upcoming shifts at {business_name}"
+    message = (
+        f"Hi {user.first_name or user.username},\n\n"
+        f"The following shifts have been assigned to you at {business_name}:\n\n"
+        f"{lines}\n\n"
+        "Please log in to CheckPoint to view your full schedule."
+    )
+    send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, [user.email], fail_silently=False)
+
+
+def send_shift_removed_email(user, business_name, start, end):
+    subject = f"Shift removed at {business_name}"
+    message = (
+        f"Hi {user.first_name or user.username},\n\n"
+        f"The following shift at {business_name} has been removed:\n\n"
+        f"  • {start.strftime('%A %d %b %Y')}  {start.strftime('%H:%M')}-{end.strftime('%H:%M')}\n\n"
+        "Please log in to CheckPoint to view your updated schedule."
+    )
+    send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, [user.email], fail_silently=False)
+
 def get_owner_membership(request, business_id, *, json=False, message=None):
     owner_membership = (BusinessMembership.objects.filter(
             user=request.user, 
@@ -88,8 +113,6 @@ def get_supervisor_membership(request, business_id, *, json=False, message=None)
     if json:
         return None, None, JsonResponse({"error": msg}, status=403)
     return None, None, HttpResponse(msg, status=403)
-
-
 
 def user_display_name(user):
     full_name = f"{user.first_name} {user.last_name}".strip()
