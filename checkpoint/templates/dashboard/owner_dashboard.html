@@ -1,11 +1,48 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@5" rel="stylesheet" type="text/css" />
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <link rel="stylesheet" href="{% static 'css/checkpoint.css' %}">
+    <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0&icon_names=logout" />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500&family=Fraunces:wght@700;900&display=swap" rel="stylesheet">
+    
     <title>Your Dashboard</title>
 </head>
-<body>
+<body data-theme="checkpoint">
+   <!-- 
+    <div class="bg-mesh"></div>
+
+    <div class="page">
+        <nav>
+            <div class="navbar bg-base-100 shadow-sm rounded-box">
+                <div class="navbar-start">
+                    <span class="nav-logo" style="padding: 1rem;">CheckPoint</span>
+                </div>
+                <div class="navbar-center">
+                    <span class="subtitle">Your Dashboard</h3>
+                </div>
+                <div class="navbar-end">              
+                    <form method="post" action="{% url 'logout' %}">
+                        {% csrf_token %}
+                        <button type="submit" style="padding: 1rem; color: oklch(28% 0.04 195)">
+                            <span class="material-symbols-outlined">logout</span>
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </nav>
+    </div>
+-->
+
+
     <h1>Welcome to your Dashboard</h1>
     <p>Choose a branch to manage.</p>
 
@@ -45,7 +82,6 @@
                             <th>Details</th>
                         </tr>
 
-                        <!-- IN -->
                         {% for s in item.in_staff %}
                         <tr>
                             <td>IN</td>
@@ -54,7 +90,7 @@
                         </tr>
                         {% endfor %}
 
-                        <!-- LATE -->
+
                         {% for s in item.late_staff %}
                         <tr>
                             <td>LATE</td>
@@ -69,7 +105,7 @@
                         </tr>
                         {% endfor %}
 
-                        <!-- OUT -->
+
                         {% for s in item.out_staff %}
                         <tr>
                             <td>OUT</td>
@@ -128,6 +164,7 @@
         </form>
     </div>
 
+    <script src="{% static 'js/htmx.min.js' %}"></script>
     <script>
         const chatBox = document.getElementById("chat-box");
         const chatForm = document.getElementById("chat-form");

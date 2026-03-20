@@ -1,8 +1,15 @@
+from django.conf import settings
 from django.urls import path
+from django.views.generic import TemplateView
+from django.contrib.auth.views import LoginView, LogoutView 
+from .forms import StyledAuthenticationForm
 from . import views
 
 urlpatterns = [
     path('owner/signup/', views.owner_signup, name='owner_signup'),
+    path('login/', LoginView.as_view(template_name='registration/login.html', authentication_form=StyledAuthenticationForm), name='login'),
+    path('logout/', LogoutView.as_view(), name='logout'),
+
     path('dashboard/', views.dashboard, name='dashboard'),
     path('branch/create/', views.create_branch, name='create_branch'),
     path('branches/<int:business_id>/invite-staff/', views.invite_staff, name='invite_staff'),
@@ -12,6 +19,8 @@ urlpatterns = [
     path('branches/<int:business_id>/schedule/shifts.json', views.branch_shifts_json, name='branch_shifts_json'),
     path('branches/<int:business_id>/schedule/new/', views.create_shift, name='create_shift'),
     path('branches/<int:business_id>/schedule/shifts/<int:shift_id>/delete/', views.delete_shift, name='delete_shift'),
+    path('business/<int:business_id>/schedule/pending-notifications/', views.pending_shift_notifications, name='pending_shift_notifications'),
+    path('business/<int:business_id>/schedule/send-notifications/', views.send_shift_notifications, name='send_shift_notifications'),
 
     path('schedule/chat/', views.schedule_chat, name='schedule_chat'),
     path('schedule/chat/api/', views.schedule_chat_api, name='schedule_chat_api'),
@@ -28,4 +37,6 @@ urlpatterns = [
     path("qr-scan/<uuid:token>/", views.process_qr_scan, name="process_qr_scan"),
 
     path('business/<int:business_id>/staff/<int:membership_id>/', views.staff_detail, name='staff_detail'),
+
+    path('under-construction/', TemplateView.as_view(template_name='under_construction.html'), name='under_construction'),
 ]

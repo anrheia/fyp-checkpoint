@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Delete Shift</title>
+    <title>Delete Shift - {{ business.name }}</title>
 </head>
 <body>
     <h1>Delete Shift</h1>
-    <p>Are you sure you want to delete the shift for </p>
-
+    <p>Are you sure you want to delete the following shift?</p>
+ 
     <ul>
         <li><strong>Name:</strong> {{ shift.user.first_name }} {{ shift.user.last_name }}</li>
         <li><strong>Start:</strong> {{ shift.start }}</li>
@@ -17,10 +17,21 @@
             <li><strong>Notes:</strong> {{ shift.notes }}</li>
         {% endif %}
     </ul>
+ 
+    <p>
+        {% if shift.id in pending_ids %}
+            This shift has <strong>not yet been notified</strong> — no removal email will be sent.
+        {% else %}
+            This shift was already notified — the employee will receive a removal email.
+        {% endif %}
+    </p>
+ 
     <form method="post">
         {% csrf_token %}
         <button type="submit">Delete</button>
-        <a href="{% url 'branch_schedule' business.id %}">Cancel</a>
+        <a href="{% url 'branch_schedule' business.id %}">
+            <button type="button">Cancel</button>
+        </a>
     </form>
 </body>
 </html>
