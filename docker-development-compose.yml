@@ -22,9 +22,13 @@ services:
       DB_HOST: db
       DB_PORT: 5432
       DJANGO_SETTINGS_MODULE: myproject.settings.ci
-    command: gunicorn myproject.wsgi:application --bind 0.0.0.0:8000 --workers 3 --timeout 180 --log-level info --capture-output --enable-stdio-inheritance
+    command: >
+      sh -c "python manage.py collectstatic --noinput &&
+        gunicorn myproject.wsgi:application --bind 0.0.0.0:8000 --workers 3 --timeout 180 --log-level info --capture-output --enable-stdio-inheritance"
     expose:
       - 8000
+    volumes:
+      - static_files:/app/staticfiles
     depends_on:
       db:
         condition: service_healthy

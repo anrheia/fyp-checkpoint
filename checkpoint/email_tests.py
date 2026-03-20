@@ -2,8 +2,10 @@ from django.test import TestCase, Client
 from django.urls import reverse
 from django.contrib.auth import get_user_model
 from django.core import mail
+from django.utils import timezone
+from datetime import timedelta
 from unittest.mock import patch
-from .models import Business, BusinessMembership
+from .models import Business, BusinessMembership, WorkShift
 
 User = get_user_model()
 
@@ -83,7 +85,6 @@ class InviteStaffViewTests(TestCase):
         self.assertEqual(membership.role, BusinessMembership.EMPLOYEE)
 
     def test_supervisor_role_forced_to_employee(self):
-        """Supervisors cannot invite other supervisors — role should be forced to employee."""
         self.client.force_login(self.supervisor)
         self.client.post(self.url, {
             'first_name': 'Sam',
@@ -176,3 +177,201 @@ class InviteStaffViewTests(TestCase):
             'role': BusinessMembership.EMPLOYEE,
         })
         self.assertFalse(User.objects.filter(email='notanemail').exists())
+
+
+class ShiftNotificationTests(TestCase):
+
+    def setUp(self):
+        self.client = Client()
+        self.owner = User.objects.create_user(
+            username='owner', email='owner@example.com', password='password123'
+        )
+        self.employee = User.objects.create_user(
+            username='employee', email='employee@example.com', password='password123',
+            first_name='Alice'
+        )
+        self.employee2 = User.objects.create_user(
+            username='employee2', email='employee2@example.com', password='password123',
+            first_name='Bob'
+        )
+        self.business = Business.objects.create(name='Test Business')
+        BusinessMembership.objects.create(
+            user=self.owner, business=self.business, role=BusinessMembership.OWNER
+        )
+        BusinessMembership.objects.create(
+            user=self.employee, business=self.business, role=BusinessMembership.EMPLOYEE
+        )
+        BusinessMembership.objects.create(
+            user=self.employee2, business=self.business, role=BusinessMembership.EMPLOYEE
+        )
+        self.now = timezone.now()
+        self.create_shift_url = reverse('create_shift', args=[self.business.id])
+        self.send_url = reverse('send_shift_notifications', args=[self.business.id])
+        self.pending_url = reverse('pending_shift_notifications', args=[self.business.id])
+
+    def _post_shift(self, user, start_offset_hours=24, duration_hours=8):
+        start = self.now + timedelta(hours=start_offset_hours)
+        end = start + timedelta(hours=duration_hours)
+        return self.client.post(self.create_shift_url, {
+            'user': user.id,
+            'start': start.strftime('%Y-%m-%dT%H:%M'),
+            'end': end.strftime('%Y-%m-%dT%H:%M'),
+            'notes': '',
+        })
+
+    # --- create_shift: session staging ---
+
+    def test_create_shift_does_not_send_email_immediately(self):
+        self.client.force_login(self.owner)
+        self._post_shift(self.employee)
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_create_shift_stages_shift_id_in_session(self):
+        self.client.force_login(self.owner)
+        self._post_shift(self.employee)
+        session_key = f"pending_shift_notifications_{self.business.id}"
+        pending = self.client.session.get(session_key, [])
+        self.assertEqual(len(pending), 1)
+        shift = WorkShift.objects.filter(user=self.employee, business=self.business).first()
+        self.assertIn(shift.id, pending)
+
+    def test_multiple_shifts_all_staged(self):
+        self.client.force_login(self.owner)
+        self._post_shift(self.employee, start_offset_hours=24)
+        self._post_shift(self.employee, start_offset_hours=48)
+        self._post_shift(self.employee2, start_offset_hours=24)
+        session_key = f"pending_shift_notifications_{self.business.id}"
+        pending = self.client.session.get(session_key, [])
+        self.assertEqual(len(pending), 3)
+
+    def test_duplicate_shift_id_not_staged_twice(self):
+        self.client.force_login(self.owner)
+        self._post_shift(self.employee)
+        shift = WorkShift.objects.filter(user=self.employee, business=self.business).first()
+        # Manually force the ID back in and re-save to simulate a double-add
+        session = self.client.session
+        session_key = f"pending_shift_notifications_{self.business.id}"
+        session[session_key] = [shift.id, shift.id]
+        session.save()
+        # Now send and confirm only one email goes out (not two)
+        self.client.post(self.send_url)
+        self.assertEqual(len(mail.outbox), 1)
+
+    # --- pending_shift_notifications view ---
+
+    def test_pending_notifications_page_accessible_to_owner(self):
+        self.client.force_login(self.owner)
+        response = self.client.get(self.pending_url)
+        self.assertEqual(response.status_code, 200)
+
+    def test_pending_notifications_page_accessible_to_supervisor(self):
+        supervisor = User.objects.create_user(username='sup', password='pass')
+        BusinessMembership.objects.create(
+            user=supervisor, business=self.business, role=BusinessMembership.SUPERVISOR
+        )
+        self.client.force_login(supervisor)
+        response = self.client.get(self.pending_url)
+        self.assertEqual(response.status_code, 200)
+
+    def test_pending_notifications_page_blocked_for_employee(self):
+        self.client.force_login(self.employee)
+        response = self.client.get(self.pending_url)
+        self.assertEqual(response.status_code, 403)
+
+    def test_pending_notifications_shows_staged_shifts(self):
+        self.client.force_login(self.owner)
+        self._post_shift(self.employee)
+        response = self.client.get(self.pending_url)
+        self.assertContains(response, self.employee.first_name)
+
+    def test_pending_notifications_empty_when_nothing_staged(self):
+        self.client.force_login(self.owner)
+        response = self.client.get(self.pending_url)
+        self.assertContains(response, 'No pending notifications')
+
+    # --- send_shift_notifications view ---
+
+    def test_send_notifications_fires_one_email_per_employee(self):
+        self.client.force_login(self.owner)
+        self._post_shift(self.employee, start_offset_hours=24)
+        self._post_shift(self.employee, start_offset_hours=48)
+        self._post_shift(self.employee2, start_offset_hours=24)
+        self.client.post(self.send_url)
+        self.assertEqual(len(mail.outbox), 2)
+
+    def test_send_notifications_email_addresses_correct(self):
+        self.client.force_login(self.owner)
+        self._post_shift(self.employee)
+        self._post_shift(self.employee2)
+        self.client.post(self.send_url)
+        recipients = {email.to[0] for email in mail.outbox}
+        self.assertIn(self.employee.email, recipients)
+        self.assertIn(self.employee2.email, recipients)
+
+    def test_send_notifications_email_lists_all_shifts_for_employee(self):
+        self.client.force_login(self.owner)
+        self._post_shift(self.employee, start_offset_hours=24)
+        self._post_shift(self.employee, start_offset_hours=48)
+        self.client.post(self.send_url)
+        self.assertEqual(len(mail.outbox), 1)
+        body = mail.outbox[0].body
+        # Both shifts should appear — confirmed by two bullet points
+        self.assertEqual(body.count('•'), 2)
+
+    def test_send_notifications_clears_session_queue(self):
+        self.client.force_login(self.owner)
+        self._post_shift(self.employee)
+        self.client.post(self.send_url)
+        session_key = f"pending_shift_notifications_{self.business.id}"
+        pending = self.client.session.get(session_key, [])
+        self.assertEqual(pending, [])
+
+    def test_send_notifications_with_empty_queue_sends_no_email(self):
+        self.client.force_login(self.owner)
+        self.client.post(self.send_url)
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_send_notifications_skips_users_without_email(self):
+        no_email_user = User.objects.create_user(username='noemail', password='pass', email='')
+        BusinessMembership.objects.create(
+            user=no_email_user, business=self.business, role=BusinessMembership.EMPLOYEE
+        )
+        self.client.force_login(self.owner)
+        self._post_shift(no_email_user)
+        self._post_shift(self.employee)
+        self.client.post(self.send_url)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn(self.employee.email, mail.outbox[0].to)
+
+    # --- delete_shift: immediate removal email ---
+
+    def test_delete_staged_shift_removes_it_from_session(self):
+        self.client.force_login(self.owner)
+        self._post_shift(self.employee)
+        shift = WorkShift.objects.filter(user=self.employee, business=self.business).first()
+        delete_url = reverse('delete_shift', args=[self.business.id, shift.id])
+        self.client.post(delete_url)
+        session_key = f"pending_shift_notifications_{self.business.id}"
+        pending = self.client.session.get(session_key, [])
+        self.assertNotIn(shift.id, pending)
+
+    def test_delete_notified_shift_sends_removal_email(self):
+        self.client.force_login(self.owner)
+        self._post_shift(self.employee)
+        self.client.post(self.send_url)  # notify first
+        mail.outbox.clear()
+        shift = WorkShift.objects.filter(user=self.employee, business=self.business).first()
+        delete_url = reverse('delete_shift', args=[self.business.id, shift.id])
+        self.client.post(delete_url)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn(self.employee.email, mail.outbox[0].to)
+        self.assertIn('removed', mail.outbox[0].subject.lower())
+
+    def test_delete_unstaged_shift_sends_no_removal_email(self):
+        self.client.force_login(self.owner)
+        self._post_shift(self.employee)
+        # Do NOT send notifications — shift is still pending
+        shift = WorkShift.objects.filter(user=self.employee, business=self.business).first()
+        delete_url = reverse('delete_shift', args=[self.business.id, shift.id])
+        self.client.post(delete_url)
+        self.assertEqual(len(mail.outbox), 0)

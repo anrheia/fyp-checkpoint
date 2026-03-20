@@ -1,17 +1,114 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@5" rel="stylesheet" type="text/css" />
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <link rel="stylesheet" href="{% static 'css/checkpoint.css' %}">
+    <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500&family=Fraunces:wght@700;900&display=swap" rel="stylesheet">
     <title>CheckPoint</title>
 </head>
-<body>
-    <h1>Welcome to CheckPoint</h1>
-    <p> For testing purposes.</p>
+<body data-theme="checkpoint">
+    <div class="bg-mesh"></div>
 
-    <p>
-        <a href="{% url 'login' %}">Log in</a> | 
-        <a href="{% url 'owner_signup' %}">Register as a restaurant owner</a>
-    </p>
+    <div class="page">
+        <nav>
+            <span class="nav-logo">CheckPoint</span>
+            <div class="nav-links">
+                <a href="{% url 'under_construction' %}">Features</a>
+                <a href="{% url 'under_construction' %}">About</a>
+            </div>
+        </nav>
+
+        <section class="hero-section">
+            <div class="eyebrow">
+                <span class="eyebrow-dot"></span>
+                Now in early access
+            </div>
+
+            <h1>CheckPoint</h1>
+
+            <span class="subtitle">Restaurant/Café staff management made simple for
+                <span class="text-rotate">
+                    <span>
+                        <span class="bg-emerald-300 text-emerald-800 px-2"> Owners </span>
+                        <span class="bg-yellow-300 text-yellow-800 px-2"> Managers </span>
+                        <span class="bg-orange-300 text-orange-800 px-2"> Staff </span>                        
+                    </span>
+                </span>
+            </span>
+
+            <div class="cta-group">
+                <button class="btn-register">
+                    <a href="{% url 'owner_signup' %}">Register as an Owner</a>
+                </button>
+                <button class="btn-login">
+                    <a href="{% url 'login' %}">Login</a>
+                </button>
+            </div>
+
+            <div class="features">
+                <span class="pill"><span class="pill-icon">📅</span> Shift scheduling</span>
+                <span class="pill"><span class="pill-icon">✅</span> Clock in/out</span>
+                <span class="pill"><span class="pill-icon">👥</span> Team overview</span>
+                <span class="pill"><span class="pill-icon">📊</span> Hours tracking</span>
+            </div>
+
+            <div class="preview-card">
+
+                <div class="card-header">
+                    <span class="card-title">Today's floor — Monday</span>
+                    <span class="card-badge">4 on shift</span>
+                </div>
+
+                <div class="staff-rows">
+                    <div class="staff-row">
+                        <div class="avatar" style="background: oklch(68% 0.13 168);">SR</div>
+                        <div class="staff-info">
+                            <div class="staff-name">Sara Reyes</div>
+                            <div class="staff-role">Floor Manager · 9am–5pm</div>
+                        </div>
+                        <div class="status-dot status-on"></div>
+                    </div>
+
+                    <div class="staff-row">
+                        <div class="avatar" style="background: oklch(62% 0.16 250);">JK</div>
+                            <div class="staff-info">
+                            <div class="staff-name">Jamie Kim</div>
+                            <div class="staff-role">Waiter · 11am–7pm</div>
+                        </div>
+                        <div class="status-dot status-brk"></div>
+                    </div>
+
+                    <div class="staff-row">
+                            <div class="avatar" style="background: oklch(65% 0.14 30);">MO</div>
+                            <div class="staff-info">
+                            <div class="staff-name">Marco Olivieri</div>
+                            <div class="staff-role">Chef · 12pm–8pm</div>
+                        </div>
+                        <div class="status-dot status-on"></div>
+                    </div>
+
+                    <div class="staff-row">
+                        <div class="avatar" style="background: oklch(60% 0.1 310);">AL</div>
+                            <div class="staff-info">
+                            <div class="staff-name">Ava Lynch</div>
+                            <div class="staff-role">Bartender · 4pm–12am</div>
+                        </div>
+                        <div class="status-dot status-off"></div>
+                    </div>
+                </div>
+            </div>
+        </section>        
+    </div>
+    <button class="help-btn">?</button>    
+    <script src="{% static 'js/htmx.min.js' %}"></script>
 </body>
 </html>

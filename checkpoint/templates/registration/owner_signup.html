@@ -1,17 +1,81 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@5" rel="stylesheet" type="text/css" />
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <link rel="stylesheet" href="{% static 'css/checkpoint.css' %}">
+    <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500&family=Fraunces:wght@700;900&display=swap" rel="stylesheet">
     <title>Register</title>
 </head>
-<body>
-    <form method="post">
-        {% csrf_token %}
-        {{ form.as_p }}
-        <button type="submit">Sign Up</button>
-    </form>
+<body data-theme="checkpoint">
+    <div class="bg-mesh"></div>
 
-    <p>Already have an account? <a href="{% url 'login' %}">Log in</a></p>
+    <div class="page">
+        <nav>
+            <span class="nav-logo">CheckPoint</span>
+            <div class="nav-links">
+                <a href="{% url 'home' %}" class="btn btn-circle" style="background: #A3E1CA; border: 2px solid #8ED7BC; color: oklch(28% 0.04 195)">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="size-[1.2em]">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18" />
+                    </svg>
+                </a>                
+            </div>
+        </nav>
+        <section class="hero-section">
+            <div id="register-card" class="rounded-2xl" style="width: min(420px, 90vw); background: #A3E1CA; border: 2px solid #8ED7BC; text-align: left; padding: 2rem;">
+                <h2 style="font-family: 'Fraunces', serif; font-size: 1.4rem; font-weight: 700; color: oklch(28% 0.04 195); margin: 0 0 0.5rem;">Register</h2>
+                <hr style="border: none; border-top: 1.5px solid #8ED7BC; margin-bottom: 1.5rem;">
+
+                <form method="post" style="display: flex; flex-direction: column; gap: 14px;">
+                    {% csrf_token %}
+
+                    <div class="register-login-field">
+                        <label class="form-label">Username</label>
+                        {{ form.username }}
+                        {% for error in form.username.errors %}<p class="form-error">{{ error }}</p>{% endfor %}
+                    </div>
+
+                    <div class="register-login-field">
+                        <label class="form-label">Email</label>
+                        {{ form.email }}
+                        {% for error in form.email.errors %}<p class="form-error">{{ error }}</p>{% endfor %}
+                    </div>
+
+                    <div class="register-login-field">
+                        <label class="form-label">Business Name</label>
+                        {{ form.business_name }}
+                        {% for error in form.business_name.errors %}<p class="form-error">{{ error }}</p>{% endfor %}
+                    </div>
+
+                    <div class="register-login-field">
+                        <label class="form-label">Password</label>
+                        {{ form.password1 }}
+                        {% for error in form.password1.errors %}<p class="form-error">{{ error }}</p>{% endfor %}
+                    </div>
+
+                    <div class="register-login-field">
+                        <label class="form-label">Confirm Password</label>
+                        {{ form.password2 }}
+                        {% for error in form.password2.errors %}<p class="form-error">{{ error }}</p>{% endfor %}
+                    </div>
+
+                    <button class="btn btn-primary w-full" type="submit" style="font-family: 'Fraunces', serif;">Sign Up</button>
+                </form>
+            </div>
+
+            <p class="form-link">
+                Already have an account? <a href="{% url 'login' %}">Log in</a>
+            </p>
+        </section>
+    </div>
+    <script src="{% static 'js/htmx.min.js' %}"></script>
 </body>
 </html>
