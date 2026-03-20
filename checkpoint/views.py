@@ -295,16 +295,12 @@ def delete_shift(request, business_id, shift_id):
                 send_shift_removed_email(user, business.name, start_local, end_local)
 
         shift.delete()
-
-        if user and user.email:
-            send_shift_removed_email(user, business.name, start_local, end_local)
-
         return redirect('branch_schedule', business_id=business.id)
 
     return render(request, 'dashboard/delete_shift.html', {
         'shift': shift,
         'business': business,
-        'pending_ids': request.session.get(f"pending_shift_notifications_{business_id}", [])
+        'pending_ids': request.session.get(f"pending_shift_notifications_{business_id}", []),
     })
 
 @login_required
