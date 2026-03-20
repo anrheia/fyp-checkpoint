@@ -290,6 +290,9 @@ def delete_shift(request, business_id, shift_id):
             pending.remove(shift.id)
             request.session[session_key] = pending
             request.session.modified = True
+        else:
+            if user and user.email:
+                send_shift_removed_email(user, business.name, start_local, end_local)
 
         shift.delete()
 
