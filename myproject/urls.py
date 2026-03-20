@@ -19,6 +19,8 @@ from django.urls import path, include
 from django.shortcuts import render, redirect
 
 from checkpoint import views
+from django.conf import settings
+from django.conf.urls.static import static
 
 urlpatterns = [
     path('', views.home, name='home'),
@@ -26,4 +28,4 @@ urlpatterns = [
     path('accounts/password_change/', views.FirstLoginPasswordChangeView.as_view(), name='password_change'),
     path('accounts/', include('django.contrib.auth.urls')),  # For built-in auth views
     path('', include('checkpoint.urls')),
-]
+] + static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)

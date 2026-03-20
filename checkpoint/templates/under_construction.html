@@ -1,0 +1,40 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@5" rel="stylesheet" type="text/css" />
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <link rel="stylesheet" href="{% static 'css/checkpoint.css' %}">
+    <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500&family=Fraunces:wght@700;900&display=swap" rel="stylesheet">
+    <title>Sorry! Under Construction</title>
+
+</head>
+<body data-theme="checkpoint">
+    <div class="bg-mesh"></div>
+    
+    <div class="page">
+        <nav>
+            <span class="nav-logo">CheckPoint</span>
+            <div class="nav-links">
+                <a href="{% url 'home' %}" class="btn btn-circle" style="background: #BDE6D8; border: 2px solid #8ED7BC; color: oklch(28% 0.04 195)">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="size-[1.2em]">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18" />
+                    </svg>
+                </a>                
+            </div>
+        </nav>
+        <section class="hero-section">
+            <div class="hardhat text-7xl mb-6 fade-up fade-up-1">🚧</div>
+            <h1>Uh-Oh. Sorry!</h1>
+            <span class="subtitle">This page is currently under construction.</span>
+        </section>
+    </div>
+    <script src="{% static 'js/htmx.min.js' %}"></script>
+</body>
+</html>
