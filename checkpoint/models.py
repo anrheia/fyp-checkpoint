@@ -1,7 +1,12 @@
 from django.db import models
 from django.conf import settings
 from django.utils import timezone
+import random
+import string
 import uuid
+
+def generate_pin():
+    return ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
 # Create your models here.
 
 class Business(models.Model):
@@ -32,6 +37,7 @@ class BusinessMembership(models.Model):
     business = models.ForeignKey(Business, on_delete=models.CASCADE)
     role = models.CharField(max_length=20, choices=role_choices ,default=EMPLOYEE)
     qr_token = models.UUIDField(default=uuid.uuid4, unique=True, db_index=True, editable=False)
+    pin_code = models.CharField(max_length=6, unique=True, db_index=True, default=generate_pin)
 
     must_change_password = models.BooleanField(default=False)
 
@@ -68,6 +74,7 @@ class StaffProfile(models.Model):
         related_name='profile'
     )
     phone_number = models.CharField(max_length=20, blank=True)
+    position = models.CharField(max_length=50, blank=True)
     supervisor_notes = models.TextField(blank=True)
 
     def __str__(self):

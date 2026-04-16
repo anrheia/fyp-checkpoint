@@ -1,0 +1,89 @@
+function initScheduleChat({ messagesId, inputId, sendBtnId, apiUrl }) {
+    const msgs = document.getElementById(messagesId);
+    const input = document.getElementById(inputId);
+    const sendBtn = document.getElementById(sendBtnId);
+    const typingId = messagesId + '-typing';
+
+    function getCsrf() {
+        return document.cookie.split('; ').find(r => r.startsWith('csrftoken='))?.split('=')[1] || '';
+    }
+
+    function appendMessage(role, text) {
+        const isUser = role === 'user';
+        const wrapper = document.createElement('div');
+        wrapper.style.cssText = `display: flex; gap: 0.6rem; align-items: flex-start; ${isUser ? 'flex-direction: row-reverse;' : ''}`;
+
+        const avatar = document.createElement('div');
+        avatar.style.cssText = `width: 1.6rem; height: 1.6rem; border-radius: 9999px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 0.65rem; font-weight: 600; background: oklch(62% 0.17 265 / 0.12); border: 1px solid oklch(62% 0.17 265 / 0.2); color: oklch(38% 0.12 265);`;
+        avatar.textContent = isUser ? 'You' : '✦';
+
+        const bubble = document.createElement('div');
+        bubble.style.cssText = `border: 1px solid oklch(0% 0 0 / 0.06); padding: 0.5rem 0.75rem; max-width: 85%; ${isUser ? 'background: oklch(62% 0.17 265 / 0.08); border-radius: 0.75rem 0 0.75rem 0.75rem;' : 'background: oklch(97% 0.01 195 / 0.8); border-radius: 0 0.75rem 0.75rem 0.75rem;'}`;
+
+        const p = document.createElement('p');
+        p.style.cssText = 'font-size: 0.8rem; color: oklch(35% 0.04 195); margin: 0; line-height: 1.55; white-space: pre-wrap;';
+        p.textContent = text;
+
+        bubble.appendChild(p);
+        wrapper.appendChild(avatar);
+        wrapper.appendChild(bubble);
+        msgs.appendChild(wrapper);
+        msgs.scrollTop = msgs.scrollHeight;
+    }
+
+    function appendTyping() {
+        const wrapper = document.createElement('div');
+        wrapper.id = typingId;
+        wrapper.style.cssText = 'display: flex; gap: 0.6rem; align-items: flex-start;';
+        wrapper.innerHTML = `
+            <div style="width:1.6rem;height:1.6rem;border-radius:9999px;background:oklch(62% 0.17 265/0.15);border:1px solid oklch(62% 0.17 265/0.25);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:0.7rem;">✦</div>
+            <div style="background:oklch(97% 0.01 195/0.8);border:1px solid oklch(0% 0 0/0.06);border-radius:0 0.75rem 0.75rem 0.75rem;padding:0.5rem 0.75rem;">
+                <span style="display:inline-flex;gap:0.3rem;align-items:center;">
+                    <span style="width:0.35rem;height:0.35rem;border-radius:50%;background:oklch(55% 0.04 195);animation:chat-bounce 1s infinite 0s;display:inline-block;"></span>
+                    <span style="width:0.35rem;height:0.35rem;border-radius:50%;background:oklch(55% 0.04 195);animation:chat-bounce 1s infinite 0.2s;display:inline-block;"></span>
+                    <span style="width:0.35rem;height:0.35rem;border-radius:50%;background:oklch(55% 0.04 195);animation:chat-bounce 1s infinite 0.4s;display:inline-block;"></span>
+                </span>
+            </div>`;
+        msgs.appendChild(wrapper);
+        msgs.scrollTop = msgs.scrollHeight;
+    }
+
+    async function sendMessage() {
+        const text = input.value.trim();
+        if (!text) return;
+        input.value = '';
+        input.disabled = true;
+        sendBtn.disabled = true;
+        appendMessage('user', text);
+        appendTyping();
+        try {
+            const res = await fetch(apiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': getCsrf() },
+                body: new URLSearchParams({ message: text, csrfmiddlewaretoken: getCsrf() }),
+            });
+            const data = await res.json();
+            document.getElementById(typingId)?.remove();
+            appendMessage('bot', data.answer || 'Something went wrong.');
+        } catch {
+            document.getElementById(typingId)?.remove();
+            appendMessage('bot', 'Error contacting server.');
+        } finally {
+            input.disabled = false;
+            sendBtn.disabled = false;
+            input.focus();
+        }
+    }
+
+    function clearChat() {
+        msgs.innerHTML = '';
+        appendMessage('bot', "Chat cleared. Ask me who's working, when, and where.");
+    }
+
+    sendBtn.addEventListener('click', sendMessage);
+    input.addEventListener('keydown', e => {
+        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+    });
+
+    return { clearChat };
+}

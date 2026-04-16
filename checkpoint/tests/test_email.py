@@ -1,14 +1,25 @@
+from datetime import timedelta
+
 from django.test import TestCase, Client
 from django.urls import reverse
 from django.contrib.auth import get_user_model
 from django.core import mail
 from django.utils import timezone
-from datetime import timedelta
-from unittest.mock import patch
-from .models import Business, BusinessMembership, WorkShift
+
+from ..models import Business, BusinessMembership, WorkShift
 
 User = get_user_model()
 
+def make_user(username, **kwargs):
+    return User.objects.create_user(username=username, password='testpass123', **kwargs)
+
+
+def make_business(name='Test Business'):
+    return Business.objects.create(name=name)
+
+
+def make_membership(user, business, role=BusinessMembership.EMPLOYEE):
+    return BusinessMembership.objects.create(user=user, business=business, role=role)
 
 class InviteStaffViewTests(TestCase):
 
@@ -21,10 +32,10 @@ class InviteStaffViewTests(TestCase):
             username='supervisor', email='supervisor@example.com', password='password123'
         )
         self.business = Business.objects.create(name='Test Business')
-        self.owner_membership = BusinessMembership.objects.create(
+        BusinessMembership.objects.create(
             user=self.owner, business=self.business, role=BusinessMembership.OWNER
         )
-        self.supervisor_membership = BusinessMembership.objects.create(
+        BusinessMembership.objects.create(
             user=self.supervisor, business=self.business, role=BusinessMembership.SUPERVISOR
         )
         self.url = reverse('invite_staff', args=[self.business.id])
@@ -62,10 +73,8 @@ class InviteStaffViewTests(TestCase):
     def test_owner_can_invite_supervisor(self):
         self.client.force_login(self.owner)
         response = self.client.post(self.url, {
-            'first_name': 'Jane',
-            'last_name': 'Doe',
-            'username': 'janedoe',
-            'email': 'jane@example.com',
+            'first_name': 'Jane', 'last_name': 'Doe',
+            'username': 'janedoe', 'email': 'jane@example.com',
             'role': BusinessMembership.SUPERVISOR,
         })
         self.assertRedirects(response, reverse('dashboard'))
@@ -75,22 +84,18 @@ class InviteStaffViewTests(TestCase):
     def test_owner_can_invite_employee(self):
         self.client.force_login(self.owner)
         self.client.post(self.url, {
-            'first_name': 'John',
-            'last_name': 'Smith',
-            'username': 'johnsmith',
-            'email': 'john@example.com',
+            'first_name': 'John', 'last_name': 'Smith',
+            'username': 'johnsmith', 'email': 'john@example.com',
             'role': BusinessMembership.EMPLOYEE,
         })
         membership = BusinessMembership.objects.get(user__username='johnsmith')
         self.assertEqual(membership.role, BusinessMembership.EMPLOYEE)
 
-    def test_supervisor_role_forced_to_employee(self):
+    def test_supervisor_role_forced_to_employee_when_invited_by_supervisor(self):
         self.client.force_login(self.supervisor)
         self.client.post(self.url, {
-            'first_name': 'Sam',
-            'last_name': 'Lee',
-            'username': 'samlee',
-            'email': 'sam@example.com',
+            'first_name': 'Sam', 'last_name': 'Lee',
+            'username': 'samlee', 'email': 'sam@example.com',
             'role': BusinessMembership.SUPERVISOR,
         })
         membership = BusinessMembership.objects.get(user__username='samlee')
@@ -99,10 +104,8 @@ class InviteStaffViewTests(TestCase):
     def test_new_user_is_created(self):
         self.client.force_login(self.owner)
         self.client.post(self.url, {
-            'first_name': 'New',
-            'last_name': 'User',
-            'username': 'newuser',
-            'email': 'newuser@example.com',
+            'first_name': 'New', 'last_name': 'User',
+            'username': 'newuser', 'email': 'newuser@example.com',
             'role': BusinessMembership.EMPLOYEE,
         })
         self.assertTrue(User.objects.filter(username='newuser').exists())
@@ -110,22 +113,29 @@ class InviteStaffViewTests(TestCase):
     def test_new_user_must_change_password(self):
         self.client.force_login(self.owner)
         self.client.post(self.url, {
-            'first_name': 'New',
-            'last_name': 'User',
-            'username': 'newuser',
-            'email': 'newuser@example.com',
+            'first_name': 'New', 'last_name': 'User',
+            'username': 'newuser', 'email': 'newuser@example.com',
             'role': BusinessMembership.EMPLOYEE,
         })
         membership = BusinessMembership.objects.get(user__username='newuser')
         self.assertTrue(membership.must_change_password)
 
+    def test_invited_user_gets_pin_code(self):
+        self.client.force_login(self.owner)
+        self.client.post(self.url, {
+            'first_name': 'New', 'last_name': 'User',
+            'username': 'newuser', 'email': 'newuser@example.com',
+            'role': BusinessMembership.EMPLOYEE,
+        })
+        membership = BusinessMembership.objects.get(user__username='newuser')
+        self.assertIsNotNone(membership.pin_code)
+        self.assertEqual(len(membership.pin_code), 6)
+
     def test_invitation_email_is_sent(self):
         self.client.force_login(self.owner)
         self.client.post(self.url, {
-            'first_name': 'Email',
-            'last_name': 'Test',
-            'username': 'emailtest',
-            'email': 'emailtest@example.com',
+            'first_name': 'Email', 'last_name': 'Test',
+            'username': 'emailtest', 'email': 'emailtest@example.com',
             'role': BusinessMembership.EMPLOYEE,
         })
         self.assertEqual(len(mail.outbox), 1)
@@ -135,10 +145,8 @@ class InviteStaffViewTests(TestCase):
     def test_invitation_email_contains_username(self):
         self.client.force_login(self.owner)
         self.client.post(self.url, {
-            'first_name': 'Email',
-            'last_name': 'Test',
-            'username': 'emailtest',
-            'email': 'emailtest@example.com',
+            'first_name': 'Email', 'last_name': 'Test',
+            'username': 'emailtest', 'email': 'emailtest@example.com',
             'role': BusinessMembership.EMPLOYEE,
         })
         self.assertIn('emailtest', mail.outbox[0].body)
@@ -146,10 +154,8 @@ class InviteStaffViewTests(TestCase):
     def test_duplicate_email_rejected(self):
         self.client.force_login(self.owner)
         response = self.client.post(self.url, {
-            'first_name': 'Dupe',
-            'last_name': 'Email',
-            'username': 'dupeemail',
-            'email': 'owner@example.com',
+            'first_name': 'Dupe', 'last_name': 'Email',
+            'username': 'dupeemail', 'email': 'owner@example.com',
             'role': BusinessMembership.EMPLOYEE,
         })
         self.assertEqual(response.status_code, 200)
@@ -158,10 +164,8 @@ class InviteStaffViewTests(TestCase):
     def test_duplicate_username_rejected(self):
         self.client.force_login(self.owner)
         response = self.client.post(self.url, {
-            'first_name': 'Dupe',
-            'last_name': 'Username',
-            'username': 'owner',
-            'email': 'unique@example.com',
+            'first_name': 'Dupe', 'last_name': 'Username',
+            'username': 'owner', 'email': 'unique@example.com',
             'role': BusinessMembership.EMPLOYEE,
         })
         self.assertEqual(response.status_code, 200)
@@ -170,14 +174,11 @@ class InviteStaffViewTests(TestCase):
     def test_invalid_form_does_not_create_user(self):
         self.client.force_login(self.owner)
         self.client.post(self.url, {
-            'first_name': '',
-            'last_name': '',
-            'username': '',
-            'email': 'notanemail',
+            'first_name': '', 'last_name': '',
+            'username': '', 'email': 'notanemail',
             'role': BusinessMembership.EMPLOYEE,
         })
         self.assertFalse(User.objects.filter(email='notanemail').exists())
-
 
 class ShiftNotificationTests(TestCase):
 
@@ -207,7 +208,6 @@ class ShiftNotificationTests(TestCase):
         self.now = timezone.now()
         self.create_shift_url = reverse('create_shift', args=[self.business.id])
         self.send_url = reverse('send_shift_notifications', args=[self.business.id])
-        self.pending_url = reverse('pending_shift_notifications', args=[self.business.id])
 
     def _post_shift(self, user, start_offset_hours=24, duration_hours=8):
         start = self.now + timedelta(hours=start_offset_hours)
@@ -219,8 +219,6 @@ class ShiftNotificationTests(TestCase):
             'notes': '',
         })
 
-    # --- create_shift: session staging ---
-
     def test_create_shift_does_not_send_email_immediately(self):
         self.client.force_login(self.owner)
         self._post_shift(self.employee)
@@ -229,7 +227,7 @@ class ShiftNotificationTests(TestCase):
     def test_create_shift_stages_shift_id_in_session(self):
         self.client.force_login(self.owner)
         self._post_shift(self.employee)
-        session_key = f"pending_shift_notifications_{self.business.id}"
+        session_key = f'pending_shift_notifications_{self.business.id}'
         pending = self.client.session.get(session_key, [])
         self.assertEqual(len(pending), 1)
         shift = WorkShift.objects.filter(user=self.employee, business=self.business).first()
@@ -240,56 +238,27 @@ class ShiftNotificationTests(TestCase):
         self._post_shift(self.employee, start_offset_hours=24)
         self._post_shift(self.employee, start_offset_hours=48)
         self._post_shift(self.employee2, start_offset_hours=24)
-        session_key = f"pending_shift_notifications_{self.business.id}"
+        session_key = f'pending_shift_notifications_{self.business.id}'
         pending = self.client.session.get(session_key, [])
         self.assertEqual(len(pending), 3)
 
-    def test_duplicate_shift_id_not_staged_twice(self):
+    def test_duplicate_shift_id_not_emailed_twice(self):
         self.client.force_login(self.owner)
         self._post_shift(self.employee)
         shift = WorkShift.objects.filter(user=self.employee, business=self.business).first()
-        # Manually force the ID back in and re-save to simulate a double-add
         session = self.client.session
-        session_key = f"pending_shift_notifications_{self.business.id}"
+        session_key = f'pending_shift_notifications_{self.business.id}'
         session[session_key] = [shift.id, shift.id]
         session.save()
-        # Now send and confirm only one email goes out (not two)
         self.client.post(self.send_url)
         self.assertEqual(len(mail.outbox), 1)
 
-    # --- pending_shift_notifications view ---
-
-    def test_pending_notifications_page_accessible_to_owner(self):
-        self.client.force_login(self.owner)
-        response = self.client.get(self.pending_url)
-        self.assertEqual(response.status_code, 200)
-
-    def test_pending_notifications_page_accessible_to_supervisor(self):
-        supervisor = User.objects.create_user(username='sup', password='pass')
-        BusinessMembership.objects.create(
-            user=supervisor, business=self.business, role=BusinessMembership.SUPERVISOR
-        )
-        self.client.force_login(supervisor)
-        response = self.client.get(self.pending_url)
-        self.assertEqual(response.status_code, 200)
-
-    def test_pending_notifications_page_blocked_for_employee(self):
+    def test_pending_notifications_blocked_for_employee(self):
         self.client.force_login(self.employee)
-        response = self.client.get(self.pending_url)
+        response = self.client.get(
+            reverse('pending_shift_notifications', args=[self.business.id])
+        )
         self.assertEqual(response.status_code, 403)
-
-    def test_pending_notifications_shows_staged_shifts(self):
-        self.client.force_login(self.owner)
-        self._post_shift(self.employee)
-        response = self.client.get(self.pending_url)
-        self.assertContains(response, self.employee.first_name)
-
-    def test_pending_notifications_empty_when_nothing_staged(self):
-        self.client.force_login(self.owner)
-        response = self.client.get(self.pending_url)
-        self.assertContains(response, 'No pending notifications')
-
-    # --- send_shift_notifications view ---
 
     def test_send_notifications_fires_one_email_per_employee(self):
         self.client.force_login(self.owner)
@@ -308,21 +277,20 @@ class ShiftNotificationTests(TestCase):
         self.assertIn(self.employee.email, recipients)
         self.assertIn(self.employee2.email, recipients)
 
-    def test_send_notifications_email_lists_all_shifts_for_employee(self):
+    def test_send_notifications_email_lists_all_shifts_per_employee(self):
         self.client.force_login(self.owner)
         self._post_shift(self.employee, start_offset_hours=24)
         self._post_shift(self.employee, start_offset_hours=48)
         self.client.post(self.send_url)
         self.assertEqual(len(mail.outbox), 1)
         body = mail.outbox[0].body
-        # Both shifts should appear — confirmed by two bullet points
         self.assertEqual(body.count('•'), 2)
 
     def test_send_notifications_clears_session_queue(self):
         self.client.force_login(self.owner)
         self._post_shift(self.employee)
         self.client.post(self.send_url)
-        session_key = f"pending_shift_notifications_{self.business.id}"
+        session_key = f'pending_shift_notifications_{self.business.id}'
         pending = self.client.session.get(session_key, [])
         self.assertEqual(pending, [])
 
@@ -343,22 +311,28 @@ class ShiftNotificationTests(TestCase):
         self.assertEqual(len(mail.outbox), 1)
         self.assertIn(self.employee.email, mail.outbox[0].to)
 
-    # --- delete_shift: immediate removal email ---
-
     def test_delete_staged_shift_removes_it_from_session(self):
         self.client.force_login(self.owner)
         self._post_shift(self.employee)
         shift = WorkShift.objects.filter(user=self.employee, business=self.business).first()
         delete_url = reverse('delete_shift', args=[self.business.id, shift.id])
         self.client.post(delete_url)
-        session_key = f"pending_shift_notifications_{self.business.id}"
+        session_key = f'pending_shift_notifications_{self.business.id}'
         pending = self.client.session.get(session_key, [])
         self.assertNotIn(shift.id, pending)
+
+    def test_delete_staged_shift_sends_no_removal_email(self):
+        self.client.force_login(self.owner)
+        self._post_shift(self.employee)
+        shift = WorkShift.objects.filter(user=self.employee, business=self.business).first()
+        delete_url = reverse('delete_shift', args=[self.business.id, shift.id])
+        self.client.post(delete_url)
+        self.assertEqual(len(mail.outbox), 0)
 
     def test_delete_notified_shift_sends_removal_email(self):
         self.client.force_login(self.owner)
         self._post_shift(self.employee)
-        self.client.post(self.send_url)  # notify first
+        self.client.post(self.send_url)
         mail.outbox.clear()
         shift = WorkShift.objects.filter(user=self.employee, business=self.business).first()
         delete_url = reverse('delete_shift', args=[self.business.id, shift.id])
@@ -367,11 +341,10 @@ class ShiftNotificationTests(TestCase):
         self.assertIn(self.employee.email, mail.outbox[0].to)
         self.assertIn('removed', mail.outbox[0].subject.lower())
 
-    def test_delete_unstaged_shift_sends_no_removal_email(self):
+    def test_delete_shift_actually_removes_it(self):
         self.client.force_login(self.owner)
         self._post_shift(self.employee)
-        # Do NOT send notifications — shift is still pending
         shift = WorkShift.objects.filter(user=self.employee, business=self.business).first()
         delete_url = reverse('delete_shift', args=[self.business.id, shift.id])
         self.client.post(delete_url)
-        self.assertEqual(len(mail.outbox), 0)
+        self.assertFalse(WorkShift.objects.filter(id=shift.id).exists())

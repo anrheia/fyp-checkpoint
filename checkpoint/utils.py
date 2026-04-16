@@ -7,7 +7,7 @@ from django.http import JsonResponse, HttpResponse
 import os, json, re
 from datetime import datetime, time, timedelta
 from openai import OpenAI
-from .models import BusinessMembership, WorkShift, TimeClock
+from .models import BusinessMembership, WorkShift, TimeClock, StaffProfile
 
 WEEKDAY_MAP = {
     "monday": 0,
@@ -49,6 +49,24 @@ def send_shift_batch_email(user, business_name, shifts):
         "Please log in to CheckPoint to view your full schedule."
     )
     send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, [user.email], fail_silently=False)
+
+
+def send_staff_message_email(sender_user, recipient_user, business_name, subject, message_body):
+    from django.core.mail import EmailMessage
+    sender_name = (sender_user.first_name + " " + sender_user.last_name).strip() or sender_user.username
+    full_subject = "[" + business_name + "] " + subject
+    body = (
+        "Message from " + sender_name + " at " + business_name + ":\n\n" +
+        message_body + "\n\n---\nReply to: " + (sender_user.email or "No email on file")
+    )
+    email = EmailMessage(
+        subject=full_subject,
+        body=body,
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        to=[recipient_user.email],
+        reply_to=[sender_user.email] if sender_user.email else [],
+    )
+    email.send(fail_silently=False)
 
 
 def send_shift_removed_email(user, business_name, start, end):
@@ -151,11 +169,18 @@ def compute_staff_status(business, minutes=15):
 
     staff_users = [m.user for m in staff_memberships]
 
+    position_by_user = {
+        p.membership.user_id: p.position
+        for p in StaffProfile.objects.filter(
+            membership__business=business
+        ).select_related("membership")
+    }
+
     shifts_recent = WorkShift.objects.filter(
         business=business,
         user__in=staff_users,
-        start__lte=now,
-        end__gte=grace_period
+        start__lte=day_end,
+        end__gte=day_start
     ).select_related("user").order_by("start")
 
     shifts_by_user = {}
@@ -183,34 +208,55 @@ def compute_staff_status(business, minutes=15):
 
     clock_by_user = {tc.user_id: tc for tc in open_clocks}
 
-    in_staff, late_staff, out_staff = [], [], []
+    in_staff, late_staff, out_staff, done_staff, not_scheduled = [], [], [], [], []
 
     for user in staff_users:
         open_tc = clock_by_user.get(user.id)
+        todays_shifts = shifts_by_user.get(user.id, [])
+
+        if not todays_shifts and not open_tc:
+            not_scheduled.append({
+                "user": user,
+                "position": position_by_user.get(user.id, ""),
+            })
+            continue
+        
         if open_tc:
-            in_staff.append({"user": user, "clock_in": open_tc.clock_in})
+            in_staff.append({"user": user, "clock_in": open_tc.clock_in, "position": position_by_user.get(user.id, "")})
             continue
 
-        todays_recent = shifts_by_user.get(user.id, [])
         active_shift = None
-        for shift in todays_recent:
+        for shift in todays_shifts:
             if shift.start <= now <= shift.end:
                 active_shift = shift
                 break
+        
+        past_shifts = None
+        for shift in todays_shifts:
+            if shift.end < now:
+                past_shifts = shift
+                break 
 
+
+        pos = position_by_user.get(user.id, "")
         if active_shift and now > (active_shift.start + timedelta(minutes=minutes)):
-            late_staff.append({"user": user, "shift": active_shift})
+            late_staff.append({"user": user, "shift": active_shift, "position": pos})
+        elif past_shifts and not active_shift:
+            done_staff.append({"user": user, "shift": past_shifts, "position": pos})
         else:
             out_staff.append({
                 "user": user,
-                "shift": active_shift,                 
-                "next_shift": next_shift_by_user.get(user.id)  
+                "shift": active_shift,
+                "next_shift": next_shift_by_user.get(user.id),
+                "position": pos,
             })
 
     return {
         "in_staff": in_staff,
         "late_staff": late_staff,
         "out_staff": out_staff,
+        "done_staff": done_staff,
+        "not_scheduled": not_scheduled,
         "now": now
     }
 # Utility function to find the next date for a given weekday, used in schedule query parsing.
@@ -236,6 +282,197 @@ def extract_weekday_request(text: str):
     return None, None
 
 # For extracting date and branch name from a schedule query message using the OpenAI API.
+
+def extract_person_schedule_query(message: str, today_iso: str) -> dict:
+    msg = (message or "").strip()
+    if not msg:
+        return {"person_name": None, "week": "this", "branch_name": None}
+
+    schema = {
+        "name": "person_schedule_query",
+        "schema": {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "person_name": {
+                    "type": ["string", "null"],
+                    "description": "The staff member's name being looked up"
+                },
+                "week": {
+                    "type": "string",
+                    "enum": ["this", "next"],
+                    "description": "'next' if asking about next week, 'this' for current week. Default to 'this'."
+                },
+                "branch_name": {
+                    "type": ["string", "null"],
+                    "description": "Restaurant/branch name if mentioned, else null"
+                }
+            },
+            "required": ["person_name", "week", "branch_name"]
+        }
+    }
+
+    client = _get_client()
+    resp = client.responses.create(
+        model="gpt-4o-mini",
+        instructions=(
+            f"Today is {today_iso}.\n"
+            "Extract the staff member's name being asked about, which week (this or next), "
+            "and the restaurant/branch name if mentioned.\n"
+            "Default week to 'this' if not specified.\n"
+            "Return ONLY JSON matching the schema."
+        ),
+        input=msg,
+        text={
+            "format": {
+                "type": "json_schema",
+                "name": schema["name"],
+                "schema": schema["schema"],
+                "strict": True
+            }
+        },
+        max_output_tokens=150
+    )
+
+    raw = (resp.output_text or "").strip()
+    try:
+        parsed = json.loads(raw)
+        return {
+            "person_name": parsed.get("person_name"),
+            "week": parsed.get("week", "this"),
+            "branch_name": parsed.get("branch_name"),
+        }
+    except Exception:
+        return {"person_name": None, "week": "this", "branch_name": None}
+
+
+def extract_coverage_query(message: str, today_iso: str) -> dict:
+    msg = (message or "").strip()
+    if not msg:
+        return {"date": None, "branch_name": None, "time_of_day": None}
+
+    schema = {
+        "name": "coverage_query",
+        "schema": {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "date": {
+                    "type": ["string", "null"],
+                    "description": "YYYY-MM-DD of the day being asked about"
+                },
+                "branch_name": {
+                    "type": ["string", "null"],
+                    "description": "Restaurant/branch name if mentioned, else null"
+                },
+                "time_of_day": {
+                    "type": ["string", "null"],
+                    "enum": ["morning", "afternoon", "evening", "night", None],
+                    "description": "Time-of-day qualifier if mentioned: morning (06-12), afternoon (12-17), evening (17-21), night (21-close). Null if the whole day is asked about."
+                }
+            },
+            "required": ["date", "branch_name", "time_of_day"]
+        }
+    }
+
+    client = _get_client()
+    resp = client.responses.create(
+        model="gpt-4o-mini",
+        instructions=(
+            f"Today is {today_iso} in Europe/Dublin.\n"
+            "Extract the target date, restaurant/branch name, and time-of-day qualifier.\n"
+            "Rules for weekdays: plain 'Saturday' means next Saturday after today.\n"
+            "'next Saturday' means the Saturday after today.\n"
+            "'this Saturday' means this week's Saturday if not passed, else next.\n"
+            "time_of_day: set to 'morning', 'afternoon', 'evening', or 'night' only if explicitly mentioned. Otherwise null.\n"
+            "Return ONLY JSON matching the schema."
+        ),
+        input=msg,
+        text={
+            "format": {
+                "type": "json_schema",
+                "name": schema["name"],
+                "schema": schema["schema"],
+                "strict": True
+            }
+        },
+        max_output_tokens=150
+    )
+
+    raw = (resp.output_text or "").strip()
+    try:
+        parsed = json.loads(raw)
+        return {
+            "date": parsed.get("date"),
+            "branch_name": parsed.get("branch_name"),
+            "time_of_day": parsed.get("time_of_day"),
+        }
+    except Exception:
+        return {"date": None, "branch_name": None, "time_of_day": None}
+
+
+def extract_hours_query(message: str, today_iso: str) -> dict:
+    msg = (message or "").strip()
+    if not msg:
+        return {"person_name": None, "week": "this", "branch_name": None}
+
+    schema = {
+        "name": "hours_query",
+        "schema": {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "person_name": {
+                    "type": ["string", "null"],
+                    "description": "The staff member's name if asking about a specific person, else null"
+                },
+                "week": {
+                    "type": "string",
+                    "enum": ["this", "next"],
+                    "description": "'next' if asking about next week, 'this' for current/this week"
+                },
+                "branch_name": {
+                    "type": ["string", "null"],
+                    "description": "Restaurant/branch name if mentioned, else null"
+                }
+            },
+            "required": ["person_name", "week", "branch_name"]
+        }
+    }
+
+    client = _get_client()
+    resp = client.responses.create(
+        model="gpt-4o-mini",
+        instructions=(
+            f"Today is {today_iso}.\n"
+            "Extract: the staff member's name (or null if asking about all staff or most hours), "
+            "which week ('this' or 'next'), and the restaurant/branch name.\n"
+            "Default week to 'this' if not specified.\n"
+            "Return ONLY JSON matching the schema."
+        ),
+        input=msg,
+        text={
+            "format": {
+                "type": "json_schema",
+                "name": schema["name"],
+                "schema": schema["schema"],
+                "strict": True
+            }
+        },
+        max_output_tokens=150
+    )
+
+    raw = (resp.output_text or "").strip()
+    try:
+        parsed = json.loads(raw)
+        return {
+            "person_name": parsed.get("person_name"),
+            "week": parsed.get("week", "this"),
+            "branch_name": parsed.get("branch_name"),
+        }
+    except Exception:
+        return {"person_name": None, "week": "this", "branch_name": None}
+
 
 def extract_schedule_query(message: str, today_iso: str) -> dict:
     msg = (message or "").strip()

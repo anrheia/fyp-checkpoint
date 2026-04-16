@@ -30,7 +30,7 @@
         <section class="hero-section">
             <div class="eyebrow">
                 <span class="eyebrow-dot"></span>
-                Now in early access
+                Developed for a final project!
             </div>
 
             <h1>CheckPoint</h1>
@@ -63,47 +63,90 @@
 
             <div class="preview-card">
 
-                <div class="card-header">
-                    <span class="card-title">Today's floor — Monday</span>
-                    <span class="card-badge">4 on shift</span>
+                <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 0.75rem; margin-bottom: 0.25rem;">
+                    <h3 style="font-family: 'Fraunces', serif; font-weight: 700; font-size: 1.2rem; letter-spacing: -0.02em; color: oklch(28% 0.04 195); margin: 0;">Papa's Freezeria</h3>
+                    <span style="font-size: 0.7rem; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; padding: 0.2rem 0.65rem; border-radius: 9999px; background: oklch(68% 0.13 168 / 0.12); color: oklch(45% 0.13 168); border: 1px solid oklch(68% 0.13 168 / 0.2);">4 on shift</span>
                 </div>
 
-                <div class="staff-rows">
-                    <div class="staff-row">
-                        <div class="avatar" style="background: oklch(68% 0.13 168);">SR</div>
-                        <div class="staff-info">
-                            <div class="staff-name">Sara Reyes</div>
-                            <div class="staff-role">Floor Manager · 9am–5pm</div>
-                        </div>
-                        <div class="status-dot status-on"></div>
+                <div style="display: flex; align-items: center; gap: 0.75rem; margin: 1rem 0;">
+                    <div style="flex: 1; height: 1px; background: oklch(0% 0 0 / 0.07);"></div>
+                    <span style="font-size: 0.7rem; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: oklch(55% 0.04 195); white-space: nowrap;">Staff On-Shift Today</span>
+                    <div style="flex: 1; height: 1px; background: oklch(0% 0 0 / 0.07);"></div>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 80px 1fr 1fr; padding: 0 0.5rem 0.4rem; font-size: 0.7rem; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: oklch(55% 0.04 195);">
+                    <span>Status</span>
+                    <span>Staff</span>
+                    <span>Details</span>
+                </div>
+
+                <div style="display: flex; flex-direction: column; gap: 0.25rem;">
+
+                    <!-- IN -->
+                    <div style="display: grid; grid-template-columns: 80px 1fr 1fr; align-items: center; padding: 0.5rem; border-radius: 0.75rem; background: oklch(94% 0.05 168 / 0.4);">
+                        <span style="display: inline-flex; align-items: center; gap: 0.4rem;">
+                            <span style="display: inline-grid;">
+                                <span style="width: 8px; height: 8px; border-radius: 50%; background: oklch(68% 0.13 168); opacity: 0.4; animation: ping 1.5s cubic-bezier(0,0,0.2,1) infinite; grid-area: 1/1;"></span>
+                                <span style="width: 8px; height: 8px; border-radius: 50%; background: oklch(68% 0.13 168); grid-area: 1/1;"></span>
+                            </span>
+                            <span style="font-size: 0.75rem; font-weight: 600; color: oklch(40% 0.13 168);">IN</span>
+                        </span>
+                        <span style="display: inline-flex; align-items: center; gap: 0.5rem;">
+                            <div class="avatar avatar-placeholder"><div class="bg-neutral text-neutral-content w-8 rounded-full"><span class="text-xs">SR</span></div></div>
+                            <span style="font-size: 0.875rem; font-weight: 500; color: oklch(28% 0.04 195);">Sara Reyes</span>
+                            <span style="font-size: 0.65rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; padding: 0.15rem 0.5rem; border-radius: 9999px; background: oklch(62% 0.17 265 / 0.12); color: oklch(38% 0.12 265); border: 1px solid oklch(62% 0.17 265 / 0.2);">Floor</span>
+                        </span>
+                        <span style="font-size: 0.875rem; color: oklch(50% 0.04 195);">Clocked in 09:00</span>
                     </div>
 
-                    <div class="staff-row">
-                        <div class="avatar" style="background: oklch(62% 0.16 250);">JK</div>
-                            <div class="staff-info">
-                            <div class="staff-name">Jamie Kim</div>
-                            <div class="staff-role">Waiter · 11am–7pm</div>
-                        </div>
-                        <div class="status-dot status-brk"></div>
+                    <!-- IN -->
+                    <div style="display: grid; grid-template-columns: 80px 1fr 1fr; align-items: center; padding: 0.5rem; border-radius: 0.75rem; background: oklch(94% 0.05 168 / 0.4);">
+                        <span style="display: inline-flex; align-items: center; gap: 0.4rem;">
+                            <span style="display: inline-grid;">
+                                <span style="width: 8px; height: 8px; border-radius: 50%; background: oklch(68% 0.13 168); opacity: 0.4; animation: ping 1.5s cubic-bezier(0,0,0.2,1) infinite; grid-area: 1/1;"></span>
+                                <span style="width: 8px; height: 8px; border-radius: 50%; background: oklch(68% 0.13 168); grid-area: 1/1;"></span>
+                            </span>
+                            <span style="font-size: 0.75rem; font-weight: 600; color: oklch(40% 0.13 168);">IN</span>
+                        </span>
+                        <span style="display: inline-flex; align-items: center; gap: 0.5rem;">
+                            <div class="avatar avatar-placeholder"><div class="bg-neutral text-neutral-content w-8 rounded-full"><span class="text-xs">MO</span></div></div>
+                            <span style="font-size: 0.875rem; font-weight: 500; color: oklch(28% 0.04 195);">Marco Olivieri</span>
+                            <span style="font-size: 0.65rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; padding: 0.15rem 0.5rem; border-radius: 9999px; background: oklch(62% 0.17 265 / 0.12); color: oklch(38% 0.12 265); border: 1px solid oklch(62% 0.17 265 / 0.2);">Kitchen</span>
+                        </span>
+                        <span style="font-size: 0.875rem; color: oklch(50% 0.04 195);">Clocked in 12:00</span>
                     </div>
 
-                    <div class="staff-row">
-                            <div class="avatar" style="background: oklch(65% 0.14 30);">MO</div>
-                            <div class="staff-info">
-                            <div class="staff-name">Marco Olivieri</div>
-                            <div class="staff-role">Chef · 12pm–8pm</div>
-                        </div>
-                        <div class="status-dot status-on"></div>
+                    <!-- LATE -->
+                    <div style="display: grid; grid-template-columns: 80px 1fr 1fr; align-items: center; padding: 0.5rem; border-radius: 0.75rem; background: oklch(94% 0.05 85 / 0.5);">
+                        <span style="display: inline-flex; align-items: center; gap: 0.4rem;">
+                            <span style="display: inline-grid;">
+                                <span style="width: 8px; height: 8px; border-radius: 50%; background: oklch(78% 0.15 70); opacity: 0.4; animation: ping 1.5s cubic-bezier(0,0,0.2,1) infinite; grid-area: 1/1;"></span>
+                                <span style="width: 8px; height: 8px; border-radius: 50%; background: oklch(78% 0.15 70); grid-area: 1/1;"></span>
+                            </span>
+                            <span style="font-size: 0.75rem; font-weight: 600; color: oklch(50% 0.12 70);">LATE</span>
+                        </span>
+                        <span style="display: inline-flex; align-items: center; gap: 0.5rem;">
+                            <div class="avatar avatar-placeholder"><div class="bg-neutral text-neutral-content w-8 rounded-full"><span class="text-xs">JK</span></div></div>
+                            <span style="font-size: 0.875rem; font-weight: 500; color: oklch(28% 0.04 195);">Jamie Kim</span>
+                            <span style="font-size: 0.65rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; padding: 0.15rem 0.5rem; border-radius: 9999px; background: oklch(62% 0.17 265 / 0.12); color: oklch(38% 0.12 265); border: 1px solid oklch(62% 0.17 265 / 0.2);">Bar</span>
+                        </span>
+                        <span style="font-size: 0.875rem; color: oklch(50% 0.04 195);">Started 11:00</span>
                     </div>
 
-                    <div class="staff-row">
-                        <div class="avatar" style="background: oklch(60% 0.1 310);">AL</div>
-                            <div class="staff-info">
-                            <div class="staff-name">Ava Lynch</div>
-                            <div class="staff-role">Bartender · 4pm–12am</div>
-                        </div>
-                        <div class="status-dot status-off"></div>
+                    <!-- OUT -->
+                    <div style="display: grid; grid-template-columns: 80px 1fr 1fr; align-items: center; padding: 0.5rem; border-radius: 0.75rem; background: oklch(94% 0.03 85 / 0.3);">
+                        <span style="display: inline-flex; align-items: center; gap: 0.4rem;">
+                            <span style="width: 8px; height: 8px; border-radius: 50%; background: oklch(70% 0.02 195);"></span>
+                            <span style="font-size: 0.75rem; font-weight: 600; color: oklch(55% 0.04 195);">OUT</span>
+                        </span>
+                        <span style="display: inline-flex; align-items: center; gap: 0.5rem;">
+                            <div class="avatar avatar-placeholder"><div class="bg-neutral text-neutral-content w-8 rounded-full"><span class="text-xs">AL</span></div></div>
+                            <span style="font-size: 0.875rem; font-weight: 500; color: oklch(28% 0.04 195);">Ava Lynch</span>
+                            <span style="font-size: 0.65rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; padding: 0.15rem 0.5rem; border-radius: 9999px; background: oklch(62% 0.17 265 / 0.12); color: oklch(38% 0.12 265); border: 1px solid oklch(62% 0.17 265 / 0.2);">Bar</span>
+                        </span>
+                        <span style="font-size: 0.875rem; color: oklch(50% 0.04 195);">Shift 16:00–00:00</span>
                     </div>
+
                 </div>
             </div>
         </section>        

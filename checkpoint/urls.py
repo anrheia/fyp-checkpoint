@@ -12,6 +12,7 @@ urlpatterns = [
 
     path('dashboard/', views.dashboard, name='dashboard'),
     path('branch/create/', views.create_branch, name='create_branch'),
+    path('branches/<int:business_id>/delete/', views.delete_branch, name='delete_branch'),
     path('branches/<int:business_id>/invite-staff/', views.invite_staff, name='invite_staff'),
     path('branches/<int:business_id>/staff/', views.view_staff, name='view_staff'),
 
@@ -29,14 +30,22 @@ urlpatterns = [
     path("business/<int:business_id>/clock-out/", views.clock_out, name="clock_out"),
 
     #staff paths
+    path("branches/<int:business_id>/message/", views.send_staff_message, name="send_staff_message"),
+    path("branches/<int:business_id>/send-message/", views.send_branch_message, name="send_branch_message"),
     path("branches/<int:business_id>/schedule/shifts/staff.json", views.staff_branch_shifts_json, name="staff_branch_shifts_json"),
     path("business/<int:business_id>/my-hours/", views.my_hours, name="my_hours"),
 
     path("business/<int:business_id>/my-qr/", views.my_qr_code, name="my_qr_code"),
     path("business/<int:business_id>/qr-scanner/", views.qr_scanner, name="qr_scanner"),
     path("qr-scan/<uuid:token>/", views.process_qr_scan, name="process_qr_scan"),
+    path("pin-scan/", views.process_pin_scan, name="process_pin_scan"),
 
     path('business/<int:business_id>/staff/<int:membership_id>/', views.staff_detail, name='staff_detail'),
+    path('branches/<int:business_id>/assign-roles/', views.assign_roles, name='assign_roles'),
+    path('branches/<int:business_id>/staff/<int:user_id>/hours.json', views.staff_hours_json, name='staff_hours_json'),
+
+    path('report/owner/', views.download_owner_report, name='download_owner_report'),
+    path('business/<int:business_id>/report/supervisor/', views.download_supervisor_report, name='download_supervisor_report'),
 
     path('under-construction/', TemplateView.as_view(template_name='under_construction.html'), name='under_construction'),
 ]
