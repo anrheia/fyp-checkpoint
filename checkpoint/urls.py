@@ -42,6 +42,8 @@ urlpatterns = [
 
     path('business/<int:business_id>/staff/<int:membership_id>/', views.staff_detail, name='staff_detail'),
     path('branches/<int:business_id>/assign-roles/', views.assign_roles, name='assign_roles'),
+    path('branches/<int:business_id>/assign-existing/', views.assign_existing_staff, name='assign_existing_staff'),
+    path('branches/<int:business_id>/staff/<int:membership_id>/remove/', views.remove_staff, name='remove_staff'),
     path('branches/<int:business_id>/staff/<int:user_id>/hours.json', views.staff_hours_json, name='staff_hours_json'),
 
     path('report/owner/', views.download_owner_report, name='download_owner_report'),

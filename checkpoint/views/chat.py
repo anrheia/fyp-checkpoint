@@ -23,10 +23,28 @@ from ..utils import (
 
 User = get_user_model()
 
+DAILY_CHAT_LIMIT = 30
+
+
+def _chat_usage_today(request):
+    """Return (count_used, session_key) for today."""
+    key = f'chat_{timezone.localdate().isoformat()}'
+    return request.session.get(key, 0), key
+
+
+def _increment_chat_usage(request):
+    count, key = _chat_usage_today(request)
+    request.session[key] = count + 1
+    request.session.modified = True
+
 
 @login_required
 def schedule_chat(request):
-    return render(request, 'dashboard/schedule_chat.html')
+    used, _ = _chat_usage_today(request)
+    return render(request, 'dashboard/schedule_chat.html', {
+        'chat_limit': DAILY_CHAT_LIMIT,
+        'chat_used': used,
+    })
 
 
 @login_required
@@ -36,6 +54,14 @@ def schedule_chat_api(request):
     msg = (request.POST.get("message") or "").strip()
     if not msg:
         return JsonResponse({"answer": "Type: who's working next Friday in Luigi's?"})
+
+    used, _ = _chat_usage_today(request)
+    if used >= DAILY_CHAT_LIMIT:
+        return JsonResponse({
+            "answer": f"You've reached your daily limit of {DAILY_CHAT_LIMIT} questions. Check back tomorrow!",
+            "limit_reached": True,
+        })
+    _increment_chat_usage(request)
 
     # --- Intent: who is late today ---
     if _re.search(r"\blate\b", msg, _re.IGNORECASE):

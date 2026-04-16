@@ -1,10 +1,13 @@
 from django.contrib import messages
+from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render, redirect
 from django.views.decorators.http import require_POST
 
 from ..models import BusinessMembership
 from ..utils import get_membership, compute_staff_status, send_staff_message_email
+
+User = get_user_model()
 
 
 @login_required
@@ -16,6 +19,7 @@ def dashboard(request):
 
     if owner_memberships.exists():
         branches = [m.business for m in owner_memberships]
+        owned_branch_ids = [b.id for b in branches]
 
         branches_with_status = []
         for b in branches:
@@ -28,11 +32,18 @@ def dashboard(request):
 
             messageable = staff_memberships.exclude(user__email="")
 
+            existing_user_ids = staff_memberships.values_list('user_id', flat=True)
+            assignable_staff = User.objects.filter(
+                businessmembership__business_id__in=owned_branch_ids,
+                businessmembership__role__in=[BusinessMembership.EMPLOYEE, BusinessMembership.SUPERVISOR]
+            ).exclude(id__in=existing_user_ids).distinct()
+
             branches_with_status.append({
                 "branch": b,
                 **status,
                 "staff_memberships": staff_memberships,
                 "messageable_members": messageable,
+                "assignable_staff": assignable_staff,
             })
 
         return render(request, "dashboard/owner_dashboard.html", {
