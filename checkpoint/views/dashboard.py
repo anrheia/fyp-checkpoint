@@ -2,10 +2,12 @@ from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render, redirect
+from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from ..models import BusinessMembership
 from ..utils import get_membership, compute_staff_status, send_staff_message_email
+from .chat import DAILY_CHAT_LIMIT
 
 User = get_user_model()
 
@@ -46,8 +48,11 @@ def dashboard(request):
                 "assignable_staff": assignable_staff,
             })
 
+        chat_used = request.session.get(f'chat_{timezone.localdate().isoformat()}', 0)
         return render(request, "dashboard/owner_dashboard.html", {
-            "branches_with_status": branches_with_status
+            "branches_with_status": branches_with_status,
+            "chat_used": chat_used,
+            "chat_limit": DAILY_CHAT_LIMIT,
         })
 
     supervisor_membership = BusinessMembership.objects.filter(
@@ -66,10 +71,13 @@ def dashboard(request):
             business=business,
         ).select_related('user').exclude(user=request.user).exclude(user__email="").order_by('role', 'user__username')
 
+        chat_used = request.session.get(f'chat_{timezone.localdate().isoformat()}', 0)
         return render(request, "dashboard/supervisor_dashboard.html", {
             "business": business,
             "staff_memberships": staff_memberships,
             "messageable_members": messageable_members,
+            "chat_used": chat_used,
+            "chat_limit": DAILY_CHAT_LIMIT,
             **status
         })
 

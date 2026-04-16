@@ -91,7 +91,10 @@
                         <h3 style="font-family: 'Fraunces', serif; font-weight: 700; font-size: 1.1rem; letter-spacing: -0.02em; color: oklch(28% 0.04 195); margin: 0;">Schedule Assistant</h3>
                         <p style="font-size: 0.75rem; color: oklch(55% 0.04 195); margin-top: 0.15rem;">Ask who's working, when, and where.</p>
                     </div>
-                    <button type="button" onclick="clearSupChat()" style="font-size: 0.72rem; padding: 0.25rem 0.7rem; border-radius: 9999px; background: oklch(94% 0.02 195 / 0.6); border: 1px solid oklch(0% 0 0 / 0.08); color: oklch(45% 0.04 195); cursor: pointer; font-family: 'DM Sans', sans-serif; font-weight: 500;">Clear</button>
+                    <div style="display: flex; align-items: center; gap: 0.6rem;">
+                        <span id="sup-chat-counter" data-used="{{ chat_used }}" data-limit="{{ chat_limit }}" style="font-size: 0.7rem; font-weight: 500; color: oklch(55% 0.04 195);">{{ chat_used }}/{{ chat_limit }} today</span>
+                        <button type="button" onclick="clearSupChat()" style="font-size: 0.72rem; padding: 0.25rem 0.7rem; border-radius: 9999px; background: oklch(94% 0.02 195 / 0.6); border: 1px solid oklch(0% 0 0 / 0.08); color: oklch(45% 0.04 195); cursor: pointer; font-family: 'DM Sans', sans-serif; font-weight: 500;">Clear</button>
+                    </div>
                 </div>
                 <div style="height: 1px; background: oklch(0% 0 0 / 0.07); margin-bottom: 0.75rem;"></div>
                 <!-- Messages -->
@@ -106,9 +109,8 @@
                 <!-- Input row -->
                 <div style="display: flex; gap: 0.5rem; align-items: center;">
                     <input id="sup-chat-input" type="text" placeholder="e.g. Who's working next Friday?" autocomplete="off"
-                        style="flex: 1; background: white; border: 1.5px solid oklch(82% 0.03 195); border-radius: 0.75rem; padding: 0.5rem 0.75rem; font-family: 'DM Sans', sans-serif; font-size: 0.875rem; color: oklch(28% 0.04 195); outline: none; box-sizing: border-box;"
-                        onkeydown="if(event.key==='Enter' && !event.shiftKey){event.preventDefault();sendSupMessage();}">
-                    <button onclick="sendSupMessage()" id="sup-send-btn" class="text-white bg-gradient-to-br from-green-400 to-blue-600 hover:bg-gradient-to-bl focus:ring-4 focus:outline-none focus:ring-green-200 font-medium text-center leading-5" style="padding: 0.5rem 1rem; border-radius: 0.75rem; border: none; cursor: pointer; font-size: 0.875rem; flex-shrink: 0;">Send</button>
+                        style="flex: 1; background: white; border: 1.5px solid oklch(82% 0.03 195); border-radius: 0.75rem; padding: 0.5rem 0.75rem; font-family: 'DM Sans', sans-serif; font-size: 0.875rem; color: oklch(28% 0.04 195); outline: none; box-sizing: border-box;">
+                    <button id="sup-send-btn" class="text-white bg-gradient-to-br from-green-400 to-blue-600 hover:bg-gradient-to-bl focus:ring-4 focus:outline-none focus:ring-green-200 font-medium text-center leading-5" style="padding: 0.5rem 1rem; border-radius: 0.75rem; border: none; cursor: pointer; font-size: 0.875rem; flex-shrink: 0;">Send</button>
                 </div>
             </div>
 
@@ -496,11 +498,15 @@
 
     <script src="{% static 'js/schedule_chat.js' %}"></script>
     <script>
+        const _supCounter = document.getElementById('sup-chat-counter');
         const supChat = initScheduleChat({
             messagesId: 'sup-chat-messages',
             inputId: 'sup-chat-input',
             sendBtnId: 'sup-send-btn',
             apiUrl: "{% url 'schedule_chat_api' %}",
+            counterId: 'sup-chat-counter',
+            chatUsed: parseInt(_supCounter.dataset.used, 10),
+            chatLimit: parseInt(_supCounter.dataset.limit, 10),
         });
         function clearSupChat() { supChat.clearChat(); }
     </script>
