@@ -498,6 +498,10 @@ def extract_schedule_query(message: str, today_iso: str) -> dict:
         instructions=(
             "Extract the target date and restaurant/branch name from the message.\n"
             f"Today is {today_iso} in Europe/Dublin.\n"
+            "Relative day rules:\n"
+            f"- 'today' means {today_iso}.\n"
+            "- 'tomorrow' means the day after today.\n"
+            "- 'yesterday' means the day before today.\n"
             "Rules for weekdays:\n"
             "- If the user says a weekday like 'Friday' with no other qualifiers, choose the NEXT occurrence of that weekday after today.\n"
             "- If the user says 'next Friday', choose the NEXT occurrence of Friday after today.\n"
