@@ -3,6 +3,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.http import HttpResponse
 from django.shortcuts import render, redirect
+from django.views.decorators.http import require_POST
 
 from ..forms import InviteStaffForm, NewBranchForm, StaffProfileForm
 from ..models import Business, BusinessMembership, StaffProfile
@@ -163,3 +164,81 @@ def staff_detail(request, business_id, membership_id):
         'business': business,
         'is_owner': manager_membership.role == BusinessMembership.OWNER,
     })
+
+
+@login_required
+@require_POST
+def assign_existing_staff(request, business_id):
+    is_owner = BusinessMembership.objects.filter(
+        user=request.user,
+        business_id=business_id,
+        role=BusinessMembership.OWNER
+    ).exists()
+    if not is_owner:
+        return HttpResponse("Only owners can assign staff to branches.", status=403)
+
+    business = Business.objects.filter(id=business_id).first()
+    if not business:
+        return HttpResponse("Branch not found.", status=404)
+
+    user_id = request.POST.get('user_id')
+
+    owned_business_ids = BusinessMembership.objects.filter(
+        user=request.user,
+        role=BusinessMembership.OWNER
+    ).values_list('business_id', flat=True)
+
+    target_user = User.objects.filter(
+        id=user_id,
+        businessmembership__business_id__in=owned_business_ids,
+        businessmembership__role__in=[BusinessMembership.EMPLOYEE, BusinessMembership.SUPERVISOR]
+    ).first()
+
+    if not target_user:
+        messages.error(request, "Staff member not found.")
+        return redirect('dashboard')
+
+    if BusinessMembership.objects.filter(user=target_user, business=business).exists():
+        messages.error(request, f"{target_user.get_full_name() or target_user.username} is already in this branch.")
+        return redirect('dashboard')
+
+    new_membership = BusinessMembership.objects.create(
+        user=target_user,
+        business=business,
+        role=BusinessMembership.EMPLOYEE
+    )
+    StaffProfile.objects.create(membership=new_membership)
+    messages.success(request, f"{target_user.get_full_name() or target_user.username} has been added to {business.name}.")
+    return redirect('dashboard')
+
+
+@login_required
+@require_POST
+def remove_staff(request, business_id, membership_id):
+    is_owner = BusinessMembership.objects.filter(
+        user=request.user,
+        business_id=business_id,
+        role=BusinessMembership.OWNER
+    ).exists()
+    if not is_owner:
+        return HttpResponse("Only owners can remove staff from a branch.", status=403)
+
+    target_membership = BusinessMembership.objects.filter(
+        id=membership_id,
+        business_id=business_id,
+        role__in=[BusinessMembership.EMPLOYEE, BusinessMembership.SUPERVISOR]
+    ).select_related('user', 'business').first()
+
+    if not target_membership:
+        return HttpResponse("Staff member not found.", status=404)
+
+    target_user = target_membership.user
+    display_name = target_user.get_full_name() or target_user.username
+    branch_name = target_membership.business.name
+    target_membership.delete()
+
+    if not BusinessMembership.objects.filter(user=target_user).exists():
+        target_user.delete()
+
+    messages.success(request, f"{display_name} has been removed from {branch_name}.")
+    return redirect('dashboard')

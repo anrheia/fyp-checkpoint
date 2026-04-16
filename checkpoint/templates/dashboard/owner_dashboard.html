@@ -302,11 +302,15 @@
                                     </div>
                                     <span style="font-size: 0.875rem; font-weight: 500; color: oklch(28% 0.04 195);">{{ m.user.get_full_name|default:m.user.username }}</span>
                                 </span>
-                                <span style="display: flex; gap: 0.4rem;">
+                                <span style="display: flex; gap: 0.4rem; align-items: center;">
                                     <button class="text-white bg-gradient-to-br from-violet-500 to-purple-400 hover:bg-gradient-to-bl focus:ring-4 focus:outline-none focus:ring-violet-200 font-medium text-center leading-5" style="font-size: 0.72rem; padding: 0.25rem 0.7rem; border-radius: 9999px; border: none; cursor: pointer;" data-branch="{{ item.branch.id }}" data-user="{{ m.user.id }}" onclick="showHours(this)">Hours</button>
                                     <a href="{% url 'staff_detail' item.branch.id m.id %}">
                                         <button class="text-white bg-gradient-to-br from-blue-500 to-cyan-400 hover:bg-gradient-to-bl font-medium text-center leading-5" style="font-size: 0.72rem; padding: 0.25rem 0.7rem; border-radius: 9999px; border: none; cursor: pointer;">View Profile</button>
                                     </a>
+                                    <form method="post" action="{% url 'remove_staff' item.branch.id m.id %}" onsubmit="return confirm('Remove {{ m.user.get_full_name|default:m.user.username }} from {{ item.branch.name }}?')">
+                                        {% csrf_token %}
+                                        <button type="submit" style="font-size: 0.72rem; padding: 0.25rem 0.7rem; border-radius: 9999px; border: 1px solid oklch(70% 0.1 25 / 0.4); background: oklch(94% 0.04 25 / 0.25); color: oklch(40% 0.18 25); cursor: pointer; font-weight: 500; font-family: 'DM Sans', sans-serif;">Remove</button>
+                                    </form>
                                 </span>
                             </div>
                             {% empty %}
@@ -315,6 +319,21 @@
                             </div>
                             {% endfor %}
                         </div>
+
+                        {% if item.assignable_staff %}
+                        <div style="height: 1px; background: oklch(0% 0 0 / 0.07); margin: 1rem 0;"></div>
+                        <p style="font-size: 0.65rem; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: oklch(55% 0.04 195); margin-bottom: 0.6rem;">Assign Existing Staff</p>
+                        <form method="post" action="{% url 'assign_existing_staff' item.branch.id %}" style="display: flex; gap: 0.5rem; align-items: center;">
+                            {% csrf_token %}
+                            <select name="user_id" style="flex: 1; background: white; border: 1.5px solid oklch(82% 0.03 195); border-radius: 0.6rem; padding: 0.35rem 0.6rem; font-family: 'DM Sans', sans-serif; font-size: 0.8rem; color: oklch(28% 0.04 195); outline: none; cursor: pointer;">
+                                <option value="">— Select staff member —</option>
+                                {% for u in item.assignable_staff %}
+                                <option value="{{ u.id }}">{{ u.get_full_name|default:u.username }}</option>
+                                {% endfor %}
+                            </select>
+                            <button type="submit" class="text-white bg-gradient-to-br from-green-400 to-emerald-500 hover:bg-gradient-to-bl focus:ring-4 focus:outline-none focus:ring-green-200 font-medium text-center leading-5" style="font-size: 0.8rem; padding: 0.35rem 0.85rem; border-radius: 9999px; border: none; cursor: pointer; white-space: nowrap;">Add</button>
+                        </form>
+                        {% endif %}
                     </div>
                     <form method="dialog" class="modal-backdrop">
                         <button>close</button>

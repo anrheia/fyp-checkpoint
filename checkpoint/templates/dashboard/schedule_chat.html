@@ -55,7 +55,10 @@
                             <h2 style="font-family: 'Fraunces', serif; font-weight: 700; font-size: 1.2rem; letter-spacing: -0.02em; color: oklch(28% 0.04 195); margin: 0;">Schedule Assistant</h2>
                             <p style="font-size: 0.75rem; color: oklch(55% 0.04 195); margin-top: 0.2rem;">Ask who's working, when, and where.</p>
                         </div>
-                        <button type="button" id="clear-btn" onclick="clearChat()" style="font-size: 0.72rem; padding: 0.25rem 0.7rem; border-radius: 9999px; background: oklch(94% 0.02 195 / 0.6); border: 1px solid oklch(0% 0 0 / 0.08); color: oklch(45% 0.04 195); cursor: pointer; font-family: 'DM Sans', sans-serif; font-weight: 500;">Clear</button>
+                        <div style="display: flex; align-items: center; gap: 0.6rem;">
+                            <span id="usage-counter" style="font-size: 0.7rem; font-weight: 500; color: oklch(55% 0.04 195);">{{ chat_used }}/{{ chat_limit }} today</span>
+                            <button type="button" id="clear-btn" onclick="clearChat()" style="font-size: 0.72rem; padding: 0.25rem 0.7rem; border-radius: 9999px; background: oklch(94% 0.02 195 / 0.6); border: 1px solid oklch(0% 0 0 / 0.08); color: oklch(45% 0.04 195); cursor: pointer; font-family: 'DM Sans', sans-serif; font-weight: 500;">Clear</button>
+                        </div>
                     </div>
 
                     <div style="height: 1px; background: oklch(0% 0 0 / 0.07);"></div>
@@ -89,10 +92,30 @@
         const messagesEl = document.getElementById('chat-messages');
         const inputEl = document.getElementById('chat-input');
         const sendBtn = document.getElementById('send-btn');
+        const usageCounter = document.getElementById('usage-counter');
+        let chatUsed = {{ chat_used }};
+        const chatLimit = {{ chat_limit }};
 
         function getCsrf() {
             return document.cookie.split('; ').find(r => r.startsWith('csrftoken='))?.split('=')[1] || '';
         }
+
+        function updateCounter(used) {
+            chatUsed = used;
+            usageCounter.textContent = chatUsed + '/' + chatLimit + ' today';
+            const ratio = chatUsed / chatLimit;
+            usageCounter.style.color = ratio >= 1 ? 'oklch(45% 0.18 25)' : ratio >= 0.8 ? 'oklch(50% 0.12 70)' : 'oklch(55% 0.04 195)';
+        }
+
+        function disableInput() {
+            inputEl.disabled = true;
+            inputEl.placeholder = 'Daily limit reached. Check back tomorrow.';
+            sendBtn.disabled = true;
+            sendBtn.style.opacity = '0.4';
+            sendBtn.style.cursor = 'not-allowed';
+        }
+
+        if (chatUsed >= chatLimit) disableInput();
 
         function appendMessage(role, text) {
             const isUser = role === 'user';
@@ -155,13 +178,17 @@
                 const data = await res.json();
                 document.getElementById('typing-indicator')?.remove();
                 appendMessage('bot', data.answer || 'Something went wrong.');
+                if (!data.limit_reached) updateCounter(chatUsed + 1);
             } catch {
                 document.getElementById('typing-indicator')?.remove();
                 appendMessage('bot', 'Error contacting server.');
             } finally {
                 inputEl.disabled = false;
                 sendBtn.disabled = false;
+                sendBtn.style.opacity = '';
+                sendBtn.style.cursor = '';
                 inputEl.focus();
+                if (chatUsed >= chatLimit) disableInput();
             }
         }
 
