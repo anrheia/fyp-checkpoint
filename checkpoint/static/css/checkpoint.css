@@ -1,0 +1,20 @@
+[data-theme="checkpoint"] {
+  --color-primary: oklch(68% 0.13 168);
+  --color-primary-content: oklch(99% 0 0);
+  --color-base-100: oklch(98% 0.02 85);
+  --color-base-200: oklch(94% 0.03 85);
+  --color-base-300: oklch(89% 0.04 85);
+  --color-base-content: oklch(28% 0.04 195);
+  --rounded-btn: 0.75rem;
+  --bg-base-100: oklch(98% 0.02 85);
+  --bg-base-200: oklch(94% 0.03 85);
+  --bg-base-300: oklch(89% 0.04 85);
+}
+
+
+input[type="text"],
+input[type="email"],
+input[type="password"] {
+  padding-left: 0.75rem !important;
+  padding-right: 0.75rem !important;
+}

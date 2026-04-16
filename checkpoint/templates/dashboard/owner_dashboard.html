@@ -1,170 +1,596 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@5" rel="stylesheet" type="text/css" />
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <link rel="stylesheet" href="{% static 'css/checkpoint.css' %}">
+    <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0&icon_names=logout" />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500&family=Fraunces:wght@700;900&display=swap" rel="stylesheet">
+    
     <title>Your Dashboard</title>
 </head>
-<body>
-    <h1>Welcome to your Dashboard</h1>
-    <p>Choose a branch to manage.</p>
+<body data-theme="checkpoint">
+    <div class="bg-mesh"></div>
 
-    <form method="post" action="{% url 'logout' %}">
-        {% csrf_token %}
-        <button type="submit">Log out</button>
-    </form>
+    <div class="page">
+        <nav>
+            <div class="navbar shadow-sm rounded-box" style="background: oklch(99% 0 0 / 0.45); backdrop-filter: blur(20px);">
+                <div class="navbar-start">
+                    <span class="nav-logo" style="padding: 0.75rem;">CheckPoint</span>
+                </div>
+                <div class="navbar-center hidden sm:flex">
+                    <span class="subtitle">{{ request.user.first_name|default:request.user.username }}'s Dashboard</span>
+                </div>
+                <div class="navbar-end">
+                    <form method="post" action="{% url 'logout' %}">
+                        {% csrf_token %}
+                        <button type="submit" style="padding: 1rem; color: oklch(28% 0.04 195)">
+                            <span class="material-symbols-outlined">logout</span>
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </nav>
 
-    <hr>
+        <div class="page-content">
 
-    <h2>Your Branches</h2>
+            {% if messages %}
+            <div style="margin-bottom: 1rem;">
+                {% for message in messages %}
+                {% if 'success' in message.tags %}
+                <div class="auto-fade-banner" style="padding: 0.75rem 1rem; border-radius: 0.75rem; margin-bottom: 0.5rem; background: oklch(94% 0.05 168 / 0.35); border: 1px solid oklch(70% 0.12 168 / 0.35); transition: opacity 0.6s ease, margin 0.6s ease, padding 0.6s ease, max-height 0.6s ease; overflow: hidden;">
+                    <p style="font-size: 0.875rem; color: oklch(35% 0.12 168); margin: 0;">{{ message }}</p>
+                </div>
+                {% else %}
+                <div class="auto-fade-banner" style="padding: 0.75rem 1rem; border-radius: 0.75rem; margin-bottom: 0.5rem; background: oklch(94% 0.04 25 / 0.3); border: 1px solid oklch(70% 0.1 25 / 0.3); transition: opacity 0.6s ease, margin 0.6s ease, padding 0.6s ease, max-height 0.6s ease; overflow: hidden;">
+                    <p style="font-size: 0.875rem; color: oklch(40% 0.18 25); margin: 0;">{{ message }}</p>
+                </div>
+                {% endif %}
+                {% endfor %}
+            </div>
+            <script>
+                document.querySelectorAll('.auto-fade-banner').forEach(el => {
+                    setTimeout(() => {
+                        el.style.opacity = '0';
+                        el.style.marginBottom = '0';
+                        el.style.padding = '0';
+                        el.style.maxHeight = '0';
+                        setTimeout(() => el.remove(), 600);
+                    }, 3000);
+                });
+            </script>
+            {% endif %}
 
-        {% if branches_with_status %}
-        <ul>
-            {% for item in branches_with_status %}
-                <li>
-                    <h3>{{ item.branch.name }}</h3>
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.25rem;">
+                <h2 style="font-family: 'Fraunces', serif; font-weight: 900; font-size: 1.875rem; letter-spacing: -0.03em; color: oklch(28% 0.04 195);">
+                    Your Branches
+                </h2>
+                <div style="display: flex; gap: 0.5rem;">
+                    <button type="button" onclick="document.getElementById('owner-report-modal').showModal()" class="text-white bg-gradient-to-br from-amber-400 to-orange-500 hover:bg-gradient-to-bl focus:ring-4 focus:outline-none focus:ring-amber-200 font-medium text-center leading-5" style="font-size: 0.8rem; padding: 0.35rem 0.85rem; border-radius: 9999px; border: none; cursor: pointer; font-family: 'DM Sans', sans-serif;">Download Report</button>
+                    <button type="button" onclick="document.getElementById('new-branch-modal').showModal()" class="text-white bg-gradient-to-br from-green-400 to-blue-600 hover:bg-gradient-to-bl focus:ring-4 focus:outline-none focus:ring-green-200 font-medium text-center leading-5" style="padding: 0.35rem 0.85rem; border-radius: 9999px; border: none; cursor: pointer; font-size: 0.875rem;">New Branch</button>
+                </div>
+            </div>
 
-                    <a href="{% url 'invite_staff' item.branch.id %}">
-                        <button type="button">Invite Staff</button>
-                    </a>
+            <!-- Schedule Assistant (embedded) -->
+            <div style="background: oklch(99% 0 0 / 0.65); backdrop-filter: blur(20px); border: 1px solid oklch(0% 0 0 / 0.07); box-shadow: 0 8px 32px oklch(0% 0 0 / 0.06); border-radius: 1rem; padding: 1.25rem; margin-bottom: 1.5rem;">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">
+                    <div>
+                        <h3 style="font-family: 'Fraunces', serif; font-weight: 700; font-size: 1.1rem; letter-spacing: -0.02em; color: oklch(28% 0.04 195); margin: 0;">Schedule Assistant</h3>
+                        <p style="font-size: 0.75rem; color: oklch(55% 0.04 195); margin-top: 0.15rem;">Ask who's working, when, and where.</p>
+                    </div>
+                    <button type="button" onclick="clearOwnerChat()" style="font-size: 0.72rem; padding: 0.25rem 0.7rem; border-radius: 9999px; background: oklch(94% 0.02 195 / 0.6); border: 1px solid oklch(0% 0 0 / 0.08); color: oklch(45% 0.04 195); cursor: pointer; font-family: 'DM Sans', sans-serif; font-weight: 500;">Clear</button>
+                </div>
+                <div style="height: 1px; background: oklch(0% 0 0 / 0.07); margin-bottom: 0.75rem;"></div>
+                <!-- Messages -->
+                <div id="owner-chat-messages" style="min-height: 8rem; max-height: 16rem; overflow-y: auto; display: flex; flex-direction: column; gap: 0.6rem; padding-right: 0.25rem; margin-bottom: 0.75rem;">
+                    <div style="display: flex; gap: 0.6rem; align-items: flex-start;">
+                        <div style="width: 1.6rem; height: 1.6rem; border-radius: 9999px; background: oklch(62% 0.17 265 / 0.15); border: 1px solid oklch(62% 0.17 265 / 0.25); display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 0.7rem;">✦</div>
+                        <div style="background: oklch(97% 0.01 195 / 0.8); border: 1px solid oklch(0% 0 0 / 0.06); border-radius: 0 0.75rem 0.75rem 0.75rem; padding: 0.5rem 0.75rem; max-width: 85%;">
+                            <p style="font-size: 0.8rem; color: oklch(35% 0.04 195); margin: 0; line-height: 1.5;">Ask me things like <em>"who's working Friday in Luigi's?"</em> or <em>"who's on shift next Monday?"</em></p>
+                        </div>
+                    </div>
+                </div>
+                <!-- Input row -->
+                <div style="display: flex; gap: 0.5rem; align-items: center;">
+                    <input id="owner-chat-input" type="text" placeholder="e.g. Who's working next Friday?" autocomplete="off"
+                        style="flex: 1; background: white; border: 1.5px solid oklch(82% 0.03 195); border-radius: 0.75rem; padding: 0.5rem 0.75rem; font-family: 'DM Sans', sans-serif; font-size: 0.875rem; color: oklch(28% 0.04 195); outline: none; box-sizing: border-box;"
+                        >
+                    <button id="owner-send-btn" class="text-white bg-gradient-to-br from-green-400 to-blue-600 hover:bg-gradient-to-bl focus:ring-4 focus:outline-none focus:ring-green-200 font-medium text-center leading-5" style="padding: 0.5rem 1rem; border-radius: 0.75rem; border: none; cursor: pointer; font-size: 0.875rem; flex-shrink: 0;">Send</button>
+                </div>
+            </div>
 
-                    <a href="{% url 'view_staff' item.branch.id %}">
-                        <button type="button">View Staff</button>
-                    </a>
+            {% if branches_with_status %}
+            <div class="grid sm:grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+                {% for item in branches_with_status %}
 
-                    <a href="{% url 'branch_schedule' item.branch.id %}">
-                        <button type="button">View Schedule</button>
-                    </a>
+                <div style="background: oklch(99% 0 0 / 0.65); backdrop-filter: blur(20px); border: 1px solid oklch(0% 0 0 / 0.07); box-shadow: 0 8px 32px oklch(0% 0 0 / 0.06); border-radius: 1rem; padding: 1.25rem;">
 
-                    <h4>Live Staff Activity</h4>
+                    <!-- Card header -->
+                    <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 0.25rem;">
+                        <h3 style="font-family: 'Fraunces', serif; font-weight: 700; font-size: 1.2rem; letter-spacing: -0.02em; color: oklch(28% 0.04 195);">
+                            {{ item.branch.name }}
+                        </h3>
+                        <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+                            <a href="{% url 'invite_staff' item.branch.id %}">
+                                <button type="button" class="text-white bg-gradient-to-br from-pink-500 to-orange-400 hover:bg-gradient-to-bl focus:ring-4 focus:outline-none focus:ring-pink-200 dark:focus:ring-pink-800 font-medium rounded-base text-sm px-4 py-2.5 text-center leading-5" style="padding: 0.35rem 0.85rem; border-radius: 9999px;">Invite Staff</button>
+                            </a>
+                            <a href="{% url 'qr_scanner' item.branch.id %}">
+                                <button type="button" class="text-white bg-gradient-to-br from-orange-400 to-yellow-300 hover:bg-gradient-to-bl focus:ring-4 focus:outline-none focus:ring-orange-200 font-medium rounded-base text-sm px-4 py-2.5 text-center leading-5" style="padding: 0.35rem 0.85rem; border-radius: 9999px;">QR Scanner</button>
+                            </a>
+                            <button type="button" class="text-white bg-gradient-to-br from-green-400 to-emerald-500 hover:bg-gradient-to-bl focus:ring-4 focus:outline-none focus:ring-green-200 font-medium rounded-base text-sm px-4 py-2.5 text-center leading-5" style="padding: 0.35rem 0.85rem; border-radius: 9999px;" onclick="document.getElementById('staff-modal-{{ item.branch.id }}').showModal()">View Staff</button>
+                            <button type="button" class="text-white bg-gradient-to-br from-blue-500 to-cyan-400 hover:bg-gradient-to-bl focus:ring-4 focus:outline-none focus:ring-blue-200 font-medium text-center leading-5" style="padding: 0.35rem 0.85rem; border-radius: 9999px; border: none; cursor: pointer; font-size: 0.875rem;" onclick="document.getElementById('assign-roles-modal-{{ item.branch.id }}').showModal()">Assign Roles</button>
+                            <a href="{% url 'branch_schedule' item.branch.id %}">
+                                <button type="button" class="text-white bg-gradient-to-br from-purple-500 to-violet-600 hover:bg-gradient-to-bl focus:ring-4 focus:outline-none focus:ring-purple-200 font-medium rounded-base text-sm px-4 py-2.5 text-center leading-5" style="padding: 0.35rem 0.85rem; border-radius: 9999px;">View Schedule</button>
+                            </a>
+                            {% if item.messageable_members %}
+                            <button type="button" onclick="document.getElementById('message-modal-{{ item.branch.id }}').showModal()" class="text-white bg-gradient-to-br from-indigo-400 to-indigo-600 hover:bg-gradient-to-bl focus:ring-4 focus:outline-none focus:ring-indigo-200 font-medium text-center leading-5" style="padding: 0.35rem 0.85rem; border-radius: 9999px; border: none; cursor: pointer; font-size: 0.875rem;">Message</button>
+                            {% endif %}
+                            <button type="button" style="padding: 0.35rem 0.85rem; border-radius: 9999px; font-size: 0.875rem; font-weight: 500; background: oklch(94% 0.04 25 / 0.3); color: oklch(40% 0.18 25); border: 1px solid oklch(70% 0.1 25 / 0.4); cursor: pointer;" onclick="document.getElementById('delete-modal-{{ item.branch.id }}').showModal()">Delete</button>
+                        </div>
+                    </div>
 
-                    <table border="1">
-                        <tr>
-                            <th>Status</th>
-                            <th>Staff</th>
-                            <th>Details</th>
-                        </tr>
+                    <!-- Divider -->
+                    <div style="display: flex; align-items: center; gap: 0.75rem; margin: 1rem 0;">
+                        <div style="flex: 1; height: 1px; background: oklch(0% 0 0 / 0.07);"></div>
+                        <span style="font-size: 0.7rem; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: oklch(55% 0.04 195); white-space: nowrap;">
+                            Staff On-Shift Today
+                        </span>
+                        <div style="flex: 1; height: 1px; background: oklch(0% 0 0 / 0.07);"></div>
+                    </div>
 
-                        <!-- IN -->
+                    <!-- Column headers -->
+                    <div style="display: grid; grid-template-columns: 80px 1fr 1fr; padding: 0 0.5rem 0.4rem; font-size: 0.7rem; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: oklch(55% 0.04 195);">
+                        <span>Status</span>
+                        <span>Staff</span>
+                        <span>Details</span>
+                    </div>
+
+                    <!-- Staff rows -->
+                    <div style="display: flex; flex-direction: column; gap: 0.25rem;">
+
                         {% for s in item.in_staff %}
-                        <tr>
-                            <td>IN</td>
-                            <td>{{ s.user.username }}</td>
-                            <td>Clocked in at {{ s.clock_in|time:"H:i" }}</td>
-                        </tr>
+                        <div style="display: grid; grid-template-columns: 80px 1fr 1fr; align-items: center; padding: 0.5rem; border-radius: 0.75rem; background: oklch(94% 0.05 168 / 0.4);">
+                            <span style="display: inline-flex; align-items: center; gap: 0.4rem;">
+                                <span class="inline-grid *:[grid-area:1/1]">
+                                    <div class="status status-success animate-ping"></div>
+                                    <div class="status status-success"></div>
+                                </span>
+                                <span style="font-size: 0.75rem; font-weight: 600; color: oklch(40% 0.13 168);">IN</span>
+                            </span>
+                            <span style="display: inline-flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                                <div class="avatar avatar-placeholder">
+                                    <div class="bg-neutral text-neutral-content w-8 rounded-full">
+                                        <span class="text-xs">{{ s.user.username|slice:":2"|upper }}</span>
+                                    </div>
+                                </div>
+                                <span style="font-size: 0.875rem; font-weight: 500; color: oklch(28% 0.04 195);">{{ s.user.get_full_name|default:s.user.username }}</span>
+                                {% if s.position %}<span style="font-size: 0.65rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; padding: 0.15rem 0.5rem; border-radius: 9999px; background: oklch(62% 0.17 265 / 0.12); color: oklch(38% 0.12 265); border: 1px solid oklch(62% 0.17 265 / 0.2);">{{ s.position }}</span>{% endif %}
+                            </span>
+                            <span style="font-size: 0.875rem; color: oklch(50% 0.04 195);">Clocked in {{ s.clock_in|time:"H:i" }}</span>
+                        </div>
                         {% endfor %}
 
-                        <!-- LATE -->
                         {% for s in item.late_staff %}
-                        <tr>
-                            <td>LATE</td>
-                            <td>{{ s.user.username }}</td>
-                            <td>
-                                {% if s.shift %}
-                                    Shift started {{ s.shift.start|time:"H:i" }}
-                                {% else %}
-                                    No shift found
-                                {% endif %}
-                            </td>
-                        </tr>
+                        <div style="display: grid; grid-template-columns: 80px 1fr 1fr; align-items: center; padding: 0.5rem; border-radius: 0.75rem; background: oklch(94% 0.05 85 / 0.5);">
+                            <span style="display: inline-flex; align-items: center; gap: 0.4rem;">
+                                <span class="inline-grid *:[grid-area:1/1]">
+                                    <div class="status status-warning animate-ping"></div>
+                                    <div class="status status-warning"></div>
+                                </span>
+                                <span style="font-size: 0.75rem; font-weight: 600; color: oklch(50% 0.12 70);">LATE</span>
+                            </span>
+                            <span style="display: inline-flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                                <div class="avatar avatar-placeholder">
+                                    <div class="bg-neutral text-neutral-content w-8 rounded-full">
+                                        <span class="text-xs">{{ s.user.username|slice:":2"|upper }}</span>
+                                    </div>
+                                </div>
+                                <span style="font-size: 0.875rem; font-weight: 500; color: oklch(28% 0.04 195);">{{ s.user.get_full_name|default:s.user.username }}</span>
+                                {% if s.position %}<span style="font-size: 0.65rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; padding: 0.15rem 0.5rem; border-radius: 9999px; background: oklch(62% 0.17 265 / 0.12); color: oklch(38% 0.12 265); border: 1px solid oklch(62% 0.17 265 / 0.2);">{{ s.position }}</span>{% endif %}
+                            </span>
+                            <span style="font-size: 0.875rem; color: oklch(50% 0.04 195);">
+                                {% if s.shift %}Started {{ s.shift.start|time:"H:i" }}{% else %}No shift found{% endif %}
+                            </span>
+                        </div>
                         {% endfor %}
 
-                        <!-- OUT -->
                         {% for s in item.out_staff %}
-                        <tr>
-                            <td>OUT</td>
-                            <td>{{ s.user.username }}</td>
-                            <td>
-                                {% if s.shift %}
-                                    Scheduled @ {{ s.shift.start|time:"H:i" }}
-                                {% elif s.next_shift %}
-                                    Scheduled @ {{ s.next_shift.start|time:"H:i" }}
-                                {% else %}
-                                    Not scheduled today
-                                {% endif %}
-                            </td>
-                        </tr>
+                        <div style="display: grid; grid-template-columns: 80px 1fr 1fr; align-items: center; padding: 0.5rem; border-radius: 0.75rem; background: oklch(94% 0.03 85 / 0.3);">
+                            <span style="display: inline-flex; align-items: center; gap: 0.4rem;">
+                                <div class="status status-neutral"></div>
+                                <span style="font-size: 0.75rem; font-weight: 600; color: oklch(55% 0.04 195);">OUT</span>
+                            </span>
+                            <span style="display: inline-flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                                <div class="avatar avatar-placeholder">
+                                    <div class="bg-neutral text-neutral-content w-8 rounded-full">
+                                        <span class="text-xs">{{ s.user.username|slice:":2"|upper }}</span>
+                                    </div>
+                                </div>
+                                <span style="font-size: 0.875rem; font-weight: 500; color: oklch(28% 0.04 195);">{{ s.user.get_full_name|default:s.user.username }}</span>
+                                {% if s.position %}<span style="font-size: 0.65rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; padding: 0.15rem 0.5rem; border-radius: 9999px; background: oklch(62% 0.17 265 / 0.12); color: oklch(38% 0.12 265); border: 1px solid oklch(62% 0.17 265 / 0.2);">{{ s.position }}</span>{% endif %}
+                            </span>
+                            <span style="font-size: 0.875rem; color: oklch(50% 0.04 195);">
+                                {% if s.shift %}@ {{ s.shift.start|time:"H:i" }}
+                                {% elif s.next_shift %}@ {{ s.next_shift.start|time:"H:i" }}
+                                {% else %}Not scheduled today{% endif %}
+                            </span>
+                        </div>
                         {% endfor %}
 
-                        {% if not item.in_staff and not item.late_staff and not item.out_staff %}
-                        <tr>
-                            <td colspan="3">No staff found</td>
-                        </tr>
+                        {% for s in item.done_staff %}
+                        <div style="display: grid; grid-template-columns: 80px 1fr 1fr; align-items: center; padding: 0.5rem; border-radius: 0.75rem; background: oklch(94% 0.03 250 / 0.3);">
+                            <span style="display: inline-flex; align-items: center; gap: 0.4rem;">
+                                <div class="status status-info"></div>
+                                <span style="font-size: 0.75rem; font-weight: 600; color: oklch(45% 0.1 250);">DONE</span>
+                            </span>
+                            <span style="display: inline-flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                                <div class="avatar avatar-placeholder">
+                                    <div class="bg-neutral text-neutral-content w-8 rounded-full">
+                                        <span class="text-xs">{{ s.user.username|slice:":2"|upper }}</span>
+                                    </div>
+                                </div>
+                                <span style="font-size: 0.875rem; font-weight: 500; color: oklch(28% 0.04 195);">{{ s.user.get_full_name|default:s.user.username }}</span>
+                                {% if s.position %}<span style="font-size: 0.65rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; padding: 0.15rem 0.5rem; border-radius: 9999px; background: oklch(62% 0.17 265 / 0.12); color: oklch(38% 0.12 265); border: 1px solid oklch(62% 0.17 265 / 0.2);">{{ s.position }}</span>{% endif %}
+                            </span>
+                            <span style="font-size: 0.875rem; color: oklch(50% 0.04 195);">
+                                Ended {{ s.shift.end|time:"H:i" }}
+                            </span>
+                        </div>
+                        {% endfor %}
+
+                        {% for s in item.not_scheduled %}
+                        <div style="display: grid; grid-template-columns: 80px 1fr 1fr; align-items: center; padding: 0.5rem; border-radius: 0.75rem; background: oklch(94% 0.02 195 / 0.25);">
+                            <span style="display: inline-flex; align-items: center; gap: 0.4rem;">
+                                <div class="status status-neutral" style="opacity:0.4;"></div>
+                                <span style="font-size: 0.75rem; font-weight: 600; color: oklch(65% 0.04 195);">OFF</span>
+                            </span>
+                            <span style="display: inline-flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                                <div class="avatar avatar-placeholder">
+                                    <div class="bg-neutral text-neutral-content w-8 rounded-full" style="opacity:0.5;">
+                                        <span class="text-xs">{{ s.user.username|slice:":2"|upper }}</span>
+                                    </div>
+                                </div>
+                                <span style="font-size: 0.875rem; font-weight: 500; color: oklch(50% 0.04 195);">{{ s.user.get_full_name|default:s.user.username }}</span>
+                                {% if s.position %}<span style="font-size: 0.65rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; padding: 0.15rem 0.5rem; border-radius: 9999px; background: oklch(62% 0.17 265 / 0.08); color: oklch(55% 0.08 265); border: 1px solid oklch(62% 0.17 265 / 0.15);">{{ s.position }}</span>{% endif %}
+                            </span>
+                            <span style="font-size: 0.875rem; color: oklch(65% 0.04 195);">Not scheduled today</span>
+                        </div>
+                        {% endfor %}
+
+                        {% if not item.in_staff and not item.late_staff and not item.out_staff and not item.done_staff and not item.not_scheduled %}
+                        <div style="display: flex; align-items: center; justify-content: center; padding: 1.5rem; border-radius: 0.75rem; background: oklch(94% 0.03 85 / 0.4); font-size: 0.875rem; font-style: italic; color: oklch(60% 0.04 195);">
+                            No staff scheduled today, or all scheduled staff have completed their shifts.
+                        </div>
                         {% endif %}
-                    </table>
 
-                    <hr>
+                    </div>
+                </div>
+                <dialog id="staff-modal-{{ item.branch.id }}" class="modal">
+                    <div class="modal-box" style="background: oklch(99% 0 0 / 0.85); backdrop-filter: blur(24px); border: 1px solid oklch(0% 0 0 / 0.08); box-shadow: 0 20px 60px oklch(0% 0 0 / 0.12); border-radius: 1.25rem; padding: 1.75rem; max-width: 28rem;">
+                        <!-- Header -->
+                        <div style="display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 1.25rem;">
+                            <div>
+                                <p style="font-size: 0.65rem; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: oklch(55% 0.04 195); margin-bottom: 0.2rem;">Branch Staff</p>
+                                <h3 style="font-family: 'Fraunces', serif; font-weight: 700; font-size: 1.25rem; letter-spacing: -0.02em; color: oklch(28% 0.04 195); margin: 0;">
+                                    {{ item.branch.name }}
+                                </h3>
+                            </div>
+                            <form method="dialog">
+                                <button style="width: 2rem; height: 2rem; display: flex; align-items: center; justify-content: center; border-radius: 9999px; background: oklch(0% 0 0 / 0.06); border: none; cursor: pointer; color: oklch(45% 0.04 195); font-size: 1rem;" onmouseover="this.style.background='oklch(0% 0 0 / 0.1)'" onmouseout="this.style.background='oklch(0% 0 0 / 0.06)'">✕</button>
+                            </form>
+                        </div>
 
-                </li>
-            {% endfor %}
-        </ul>
-    {% else %}
-        <p>You don't have any branches yet.</p>
-    {% endif %}
-    
-    <hr>
+                        <!-- Divider -->
+                        <div style="height: 1px; background: oklch(0% 0 0 / 0.07); margin-bottom: 1rem;"></div>
 
-    <a href="{% url 'create_branch' %}">
-        <button type="button">Create New Branch</button>
-    </a>
+                        <!-- Staff list -->
+                        <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+                            {% for m in item.staff_memberships %}
+                            <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.6rem 0.75rem; border-radius: 0.75rem; background: oklch(97% 0.01 195 / 0.6);" onmouseover="this.style.background='oklch(94% 0.02 195 / 0.8)'" onmouseout="this.style.background='oklch(97% 0.01 195 / 0.6)'">
+                                <span style="display: flex; align-items: center; gap: 0.6rem;">
+                                    <div class="avatar avatar-placeholder">
+                                        <div class="bg-neutral text-neutral-content w-8 rounded-full">
+                                            <span class="text-xs">{{ m.user.username|slice:":2"|upper }}</span>
+                                        </div>
+                                    </div>
+                                    <span style="font-size: 0.875rem; font-weight: 500; color: oklch(28% 0.04 195);">{{ m.user.get_full_name|default:m.user.username }}</span>
+                                </span>
+                                <span style="display: flex; gap: 0.4rem;">
+                                    <button class="text-white bg-gradient-to-br from-violet-500 to-purple-400 hover:bg-gradient-to-bl focus:ring-4 focus:outline-none focus:ring-violet-200 font-medium text-center leading-5" style="font-size: 0.72rem; padding: 0.25rem 0.7rem; border-radius: 9999px; border: none; cursor: pointer;" data-branch="{{ item.branch.id }}" data-user="{{ m.user.id }}" onclick="showHours(this)">Hours</button>
+                                    <a href="{% url 'staff_detail' item.branch.id m.id %}">
+                                        <button class="text-white bg-gradient-to-br from-blue-500 to-cyan-400 hover:bg-gradient-to-bl font-medium text-center leading-5" style="font-size: 0.72rem; padding: 0.25rem 0.7rem; border-radius: 9999px; border: none; cursor: pointer;">View Profile</button>
+                                    </a>
+                                </span>
+                            </div>
+                            {% empty %}
+                            <div style="display: flex; align-items: center; justify-content: center; padding: 2rem; border-radius: 0.75rem; background: oklch(94% 0.03 85 / 0.4);">
+                                <p style="font-size: 0.875rem; font-style: italic; color: oklch(60% 0.04 195); margin: 0;">No staff members yet.</p>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    <form method="dialog" class="modal-backdrop">
+                        <button>close</button>
+                    </form>
+                </dialog>
 
-    <h2>Schedule Chat</h2>
+                <!-- Assign Roles modal -->
+                <dialog id="assign-roles-modal-{{ item.branch.id }}" class="modal">
+                    <div class="modal-box" style="background: oklch(99% 0 0 / 0.85); backdrop-filter: blur(24px); border: 1px solid oklch(0% 0 0 / 0.08); box-shadow: 0 20px 60px oklch(0% 0 0 / 0.12); border-radius: 1.25rem; padding: 1.75rem; max-width: 28rem;">
+                        <div style="display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 1.25rem;">
+                            <div>
+                                <p style="font-size: 0.65rem; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: oklch(55% 0.04 195); margin-bottom: 0.2rem;">{{ item.branch.name }}</p>
+                                <h3 style="font-family: 'Fraunces', serif; font-weight: 700; font-size: 1.25rem; letter-spacing: -0.02em; color: oklch(28% 0.04 195); margin: 0;">Assign Roles</h3>
+                            </div>
+                            <form method="dialog">
+                                <button style="width: 2rem; height: 2rem; display: flex; align-items: center; justify-content: center; border-radius: 9999px; background: oklch(0% 0 0 / 0.06); border: none; cursor: pointer; color: oklch(45% 0.04 195); font-size: 1rem;" onmouseover="this.style.background='oklch(0% 0 0 / 0.1)'" onmouseout="this.style.background='oklch(0% 0 0 / 0.06)'">✕</button>
+                            </form>
+                        </div>
+                        <div style="height: 1px; background: oklch(0% 0 0 / 0.07); margin-bottom: 1.25rem;"></div>
+                        <form method="post" action="{% url 'assign_roles' item.branch.id %}">
+                            {% csrf_token %}
+                            <div style="display: flex; flex-direction: column; gap: 0.6rem; margin-bottom: 1.5rem;">
+                                {% for m in item.staff_memberships %}
+                                <div style="display: flex; align-items: center; gap: 0.75rem; padding: 0.5rem 0.75rem; border-radius: 0.75rem; background: oklch(97% 0.01 195 / 0.6);">
+                                    <div class="avatar avatar-placeholder" style="flex-shrink: 0;">
+                                        <div class="bg-neutral text-neutral-content w-8 rounded-full">
+                                            <span class="text-xs">{{ m.user.username|slice:":2"|upper }}</span>
+                                        </div>
+                                    </div>
+                                    <span style="font-size: 0.875rem; font-weight: 500; color: oklch(28% 0.04 195); min-width: 7rem;">{{ m.user.get_full_name|default:m.user.username }}</span>
+                                    <select name="position_{{ m.id }}" style="flex: 1; min-width: 0; background: white; border: 1.5px solid oklch(82% 0.03 195); border-radius: 0.6rem; padding: 0.3rem 0.6rem; font-family: 'DM Sans', sans-serif; font-size: 0.8rem; color: oklch(28% 0.04 195); outline: none; cursor: pointer;">
+                                        <option value="">— No role —</option>
+                                        <option value="Kitchen" {% if m.profile and m.profile.position == "Kitchen" %}selected{% endif %}>Kitchen</option>
+                                        <option value="Floor" {% if m.profile and m.profile.position == "Floor" %}selected{% endif %}>Floor</option>
+                                        <option value="Bar" {% if m.profile and m.profile.position == "Bar" %}selected{% endif %}>Bar</option>
+                                        <option value="Host" {% if m.profile and m.profile.position == "Host" %}selected{% endif %}>Barista</option>
+                                        <option value="Host" {% if m.profile and m.profile.position == "Host" %}selected{% endif %}>Host</option>
+                                        <option value="Manager on Duty" {% if m.profile and m.profile.position == "Manager on Duty" %}selected{% endif %}>Manager on Duty</option>
+                                        {% if m.profile and m.profile.position and m.profile.position not in "Kitchen,Floor,Bar,Host,Manager on Duty" %}
+                                        <option value="{{ m.profile.position }}" selected>{{ m.profile.position }}</option>
+                                        {% endif %}
+                                    </select>
+                                </div>
+                                {% empty %}
+                                <p style="font-size: 0.875rem; font-style: italic; color: oklch(60% 0.04 195); text-align: center; padding: 1rem 0;">No staff members yet.</p>
+                                {% endfor %}
+                            </div>
+                            <div style="display: flex; justify-content: flex-end;">
+                                <button type="submit" class="text-white bg-gradient-to-br from-indigo-500 to-violet-400 hover:bg-gradient-to-bl focus:ring-4 focus:outline-none focus:ring-indigo-200 font-medium text-center leading-5" style="font-size: 0.875rem; padding: 0.5rem 1.5rem; border-radius: 9999px; border: none; cursor: pointer;">Save Roles</button>
+                            </div>
+                        </form>
+                    </div>
+                    <form method="dialog" class="modal-backdrop"><button>close</button></form>
+                </dialog>
 
-    <div style="max-width: 700px;">
-        <div id="chat-box"
-            style="border:1px solid #ccc; padding:12px; height:260px; overflow-y:auto; white-space:pre-wrap; background:#fafafa;">
+                <!-- Message modal -->
+                {% if item.messageable_members %}
+                <dialog id="message-modal-{{ item.branch.id }}" class="modal">
+                    <div class="modal-box" style="background: oklch(99% 0 0 / 0.92); backdrop-filter: blur(24px); border: 1px solid oklch(0% 0 0 / 0.08); box-shadow: 0 20px 60px oklch(0% 0 0 / 0.12); border-radius: 1.25rem; padding: 1.75rem; max-width: 28rem;">
+                        <div style="display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 1.25rem;">
+                            <div>
+                                <p style="font-size: 0.65rem; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: oklch(55% 0.04 195); margin-bottom: 0.2rem;">{{ item.branch.name }}</p>
+                                <h3 style="font-family: 'Fraunces', serif; font-weight: 700; font-size: 1.2rem; letter-spacing: -0.02em; color: oklch(28% 0.04 195); margin: 0;">Send a Message</h3>
+                            </div>
+                            <form method="dialog">
+                                <button style="width: 2rem; height: 2rem; display: flex; align-items: center; justify-content: center; border-radius: 9999px; background: oklch(0% 0 0 / 0.06); border: none; cursor: pointer; color: oklch(45% 0.04 195); font-size: 1rem;" onmouseover="this.style.background='oklch(0% 0 0 / 0.1)'" onmouseout="this.style.background='oklch(0% 0 0 / 0.06)'">✕</button>
+                            </form>
+                        </div>
+                        <div style="height: 1px; background: oklch(0% 0 0 / 0.07); margin-bottom: 1.25rem;"></div>
+                        <form method="post" action="{% url 'send_branch_message' item.branch.id %}">
+                            {% csrf_token %}
+                            <div style="display: flex; flex-direction: column; gap: 0.85rem; margin-bottom: 1.5rem;">
+                                <div style="display: flex; flex-direction: column; gap: 0.3rem;">
+                                    <label style="font-size: 0.75rem; font-weight: 500; color: oklch(40% 0.04 195);">To</label>
+                                    <select name="recipient_id" required style="display: block; width: 100%; background: white; border: 1.5px solid oklch(82% 0.03 195); border-radius: 0.75rem; padding: 0.5rem 0.75rem; font-family: 'DM Sans', sans-serif; font-size: 0.875rem; color: oklch(28% 0.04 195); outline: none; box-sizing: border-box; cursor: pointer;">
+                                        {% for m in item.messageable_members %}
+                                        <option value="{{ m.user.id }}">{{ m.user.get_full_name|default:m.user.username }} ({{ m.get_role_display }})</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div style="display: flex; flex-direction: column; gap: 0.3rem;">
+                                    <label style="font-size: 0.75rem; font-weight: 500; color: oklch(40% 0.04 195);">Subject</label>
+                                    <input type="text" name="subject" required placeholder="e.g. Schedule update" list="owner-subject-suggestions-{{ item.branch.id }}" style="display: block; width: 100%; background: white; border: 1.5px solid oklch(82% 0.03 195); border-radius: 0.75rem; padding: 0.5rem 0.75rem; font-family: 'DM Sans', sans-serif; font-size: 0.875rem; color: oklch(28% 0.04 195); outline: none; box-sizing: border-box;">
+                                    <datalist id="owner-subject-suggestions-{{ item.branch.id }}">
+                                        <option value="Schedule update">
+                                        <option value="Shift change">
+                                        <option value="Staff notice">
+                                        <option value="General enquiry">
+                                    </datalist>
+                                </div>
+                                <div style="display: flex; flex-direction: column; gap: 0.3rem;">
+                                    <label style="font-size: 0.75rem; font-weight: 500; color: oklch(40% 0.04 195);">Message</label>
+                                    <textarea name="message" required rows="4" placeholder="Write your message here..." style="display: block; width: 100%; background: white; border: 1.5px solid oklch(82% 0.03 195); border-radius: 0.75rem; padding: 0.5rem 0.75rem; font-family: 'DM Sans', sans-serif; font-size: 0.875rem; color: oklch(28% 0.04 195); outline: none; box-sizing: border-box; resize: vertical;"></textarea>
+                                </div>
+                            </div>
+                            <div style="display: flex; justify-content: flex-end; gap: 0.5rem;">
+                                <form method="dialog" style="display: inline;">
+                                    <button type="submit" style="font-size: 0.875rem; padding: 0.45rem 1rem; border-radius: 9999px; background: oklch(94% 0.02 195 / 0.6); border: 1px solid oklch(0% 0 0 / 0.1); color: oklch(40% 0.04 195); cursor: pointer; font-family: 'DM Sans', sans-serif;">Cancel</button>
+                                </form>
+                                <button type="submit" class="text-white bg-gradient-to-br from-green-400 to-teal-500 hover:bg-gradient-to-bl focus:ring-4 focus:outline-none focus:ring-green-200 font-medium text-center leading-5" style="font-size: 0.875rem; padding: 0.45rem 1.25rem; border-radius: 9999px; border: none; cursor: pointer;">Send</button>
+                            </div>
+                        </form>
+                    </div>
+                    <form method="dialog" class="modal-backdrop"><button>close</button></form>
+                </dialog>
+                {% endif %}
+
+                <!-- Delete branch confirmation modal -->
+                <dialog id="delete-modal-{{ item.branch.id }}" class="modal">
+                    <div class="modal-box" style="background: oklch(99% 0 0 / 0.92); backdrop-filter: blur(24px); border: 1px solid oklch(0% 0 0 / 0.08); border-radius: 1.25rem; padding: 1.75rem; max-width: 24rem;">
+                        <h3 style="font-family: 'Fraunces', serif; font-weight: 700; font-size: 1.15rem; color: oklch(28% 0.04 195); margin-bottom: 0.5rem;">Delete branch?</h3>
+                        <p style="font-size: 0.875rem; color: oklch(45% 0.04 195); margin-bottom: 1.5rem;">This will permanently delete <strong>{{ item.branch.name }}</strong> and all its data. This cannot be undone.</p>
+                        <div style="display: flex; justify-content: flex-end; gap: 0.5rem;">
+                            <form method="dialog">
+                                <button style="font-size: 0.875rem; padding: 0.4rem 1rem; border-radius: 9999px; background: oklch(94% 0.02 195 / 0.6); border: 1px solid oklch(0% 0 0 / 0.1); color: oklch(40% 0.04 195); cursor: pointer;">Cancel</button>
+                            </form>
+                            <form method="post" action="{% url 'delete_branch' item.branch.id %}">
+                                {% csrf_token %}
+                                <button type="submit" style="font-size: 0.875rem; padding: 0.4rem 1rem; border-radius: 9999px; background: oklch(55% 0.18 25); border: none; color: white; cursor: pointer; font-weight: 500;">Delete</button>
+                            </form>
+                        </div>
+                    </div>
+                    <form method="dialog" class="modal-backdrop">
+                        <button>close</button>
+                    </form>
+                </dialog>
+
+                {% endfor %}
+            </div>
+
+            {% else %}
+            <div style="display: flex; align-items: center; justify-content: center; padding: 5rem 0; font-size: 1.1rem; color: oklch(55% 0.04 195);">
+                <p>You don't have any branches yet.</p>
+            </div>
+            {% endif %}
+
         </div>
-
-        <form id="chat-form" method="post" style="margin-top:10px; display:flex; gap:8px;">
-        {% csrf_token %}
-        <input
-            id="chat-message"
-            type="text"
-            placeholder="e.g. What do you want to know?"
-            autocomplete="off"
-            style="flex:1; padding:8px; font-size:16px;"
-        />
-            <button type="submit" style="padding:8px 14px; font-size:16px;">Send</button>
-        </form>
     </div>
 
+    <!-- Download Report modal -->
+    <dialog id="owner-report-modal" class="modal">
+        <div class="modal-box" style="background: oklch(99% 0 0 / 0.92); backdrop-filter: blur(24px); border: 1px solid oklch(0% 0 0 / 0.08); border-radius: 1.25rem; padding: 1.75rem; max-width: 22rem;">
+            <div style="display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 1rem;">
+                <div>
+                    <p style="font-size: 0.65rem; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: oklch(55% 0.04 195); margin-bottom: 0.2rem;">All Branches</p>
+                    <h3 style="font-family: 'Fraunces', serif; font-weight: 700; font-size: 1.2rem; letter-spacing: -0.02em; color: oklch(28% 0.04 195); margin: 0;">Download Report</h3>
+                </div>
+                <form method="dialog">
+                    <button style="width: 2rem; height: 2rem; display: flex; align-items: center; justify-content: center; border-radius: 9999px; background: oklch(0% 0 0 / 0.06); border: none; cursor: pointer; color: oklch(45% 0.04 195);">✕</button>
+                </form>
+            </div>
+            <div style="height: 1px; background: oklch(0% 0 0 / 0.07); margin-bottom: 1.25rem;"></div>
+            <form method="get" action="{% url 'download_owner_report' %}" target="_blank">
+                <div style="display: flex; flex-direction: column; gap: 0.85rem;">
+                    <div>
+                        <label style="font-size: 0.72rem; font-weight: 600; color: oklch(45% 0.04 195); display: block; margin-bottom: 0.3rem;">From</label>
+                        <input type="date" name="from" required style="width: 100%; padding: 0.45rem 0.7rem; border-radius: 0.6rem; border: 1px solid oklch(0% 0 0 / 0.12); background: oklch(99% 0 0 / 0.8); font-family: 'DM Sans', sans-serif; font-size: 0.875rem; color: oklch(28% 0.04 195); outline: none;">
+                    </div>
+                    <div>
+                        <label style="font-size: 0.72rem; font-weight: 600; color: oklch(45% 0.04 195); display: block; margin-bottom: 0.3rem;">To</label>
+                        <input type="date" name="to" required style="width: 100%; padding: 0.45rem 0.7rem; border-radius: 0.6rem; border: 1px solid oklch(0% 0 0 / 0.12); background: oklch(99% 0 0 / 0.8); font-family: 'DM Sans', sans-serif; font-size: 0.875rem; color: oklch(28% 0.04 195); outline: none;">
+                    </div>
+                    <button type="submit" class="text-white bg-gradient-to-br from-green-400 to-blue-600 hover:bg-gradient-to-bl focus:ring-4 focus:outline-none focus:ring-green-200 font-medium text-center leading-5" style="padding: 0.5rem 1rem; border-radius: 9999px; border: none; cursor: pointer; font-size: 0.875rem; margin-top: 0.25rem;">Download PDF</button>
+                </div>
+            </form>
+        </div>
+        <form method="dialog" class="modal-backdrop"><button>close</button></form>
+    </dialog>
+
+    <!-- New Branch modal -->
+    <dialog id="new-branch-modal" class="modal">
+        <div class="modal-box" style="background: oklch(99% 0 0 / 0.92); backdrop-filter: blur(24px); border: 1px solid oklch(0% 0 0 / 0.08); border-radius: 1.25rem; padding: 1.75rem; max-width: 24rem;">
+            <div style="display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 1.25rem;">
+                <div>
+                    <p style="font-size: 0.65rem; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: oklch(55% 0.04 195); margin-bottom: 0.2rem;">Branches</p>
+                    <h3 style="font-family: 'Fraunces', serif; font-weight: 700; font-size: 1.2rem; letter-spacing: -0.02em; color: oklch(28% 0.04 195); margin: 0;">New Branch</h3>
+                </div>
+                <form method="dialog">
+                    <button style="width: 2rem; height: 2rem; display: flex; align-items: center; justify-content: center; border-radius: 9999px; background: oklch(0% 0 0 / 0.06); border: none; cursor: pointer; color: oklch(45% 0.04 195);" onmouseover="this.style.background='oklch(0% 0 0 / 0.1)'" onmouseout="this.style.background='oklch(0% 0 0 / 0.06)'">✕</button>
+                </form>
+            </div>
+            <div style="height: 1px; background: oklch(0% 0 0 / 0.07); margin-bottom: 1.25rem;"></div>
+            <form method="post" action="{% url 'create_branch' %}" id="new-branch-form">
+                {% csrf_token %}
+                <div style="display: flex; flex-direction: column; gap: 0.25rem; margin-bottom: 1.5rem;">
+                    <label style="font-size: 0.75rem; font-weight: 500; color: oklch(40% 0.04 195);">Branch Name</label>
+                    <input type="text" name="name" required placeholder="e.g. Dublin City Centre" style="display: block; width: 100%; background: white; border: 1.5px solid oklch(82% 0.03 195); border-radius: 0.75rem; padding: 0.5rem 0.75rem; font-family: 'DM Sans', sans-serif; font-size: 0.875rem; color: oklch(28% 0.04 195); outline: none; box-sizing: border-box;">
+                </div>
+                <div style="display: flex; justify-content: flex-end;">
+                    <button type="submit" class="text-white bg-gradient-to-br from-green-400 to-blue-600 hover:bg-gradient-to-bl focus:ring-4 focus:outline-none focus:ring-green-200 font-medium text-center leading-5" style="font-size: 0.875rem; padding: 0.5rem 1.5rem; border-radius: 9999px; border: none; cursor: pointer;">Create Branch</button>
+                </div>
+            </form>
+        </div>
+        <form method="dialog" class="modal-backdrop"><button>close</button></form>
+    </dialog>
+
+    <!-- Staff hours modal -->
+    <dialog id="hours-modal" class="modal">
+        <div class="modal-box" style="background: oklch(99% 0 0 / 0.92); backdrop-filter: blur(24px); border: 1px solid oklch(0% 0 0 / 0.08); border-radius: 1.25rem; padding: 1.75rem; max-width: 26rem;">
+            <div style="display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 1.25rem;">
+                <div>
+                    <p style="font-size: 0.65rem; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: oklch(55% 0.04 195); margin-bottom: 0.2rem;">Work Hours</p>
+                    <h3 id="hours-name" style="font-family: 'Fraunces', serif; font-weight: 700; font-size: 1.15rem; color: oklch(28% 0.04 195); margin: 0;"></h3>
+                </div>
+                <form method="dialog">
+                    <button style="width: 2rem; height: 2rem; display: flex; align-items: center; justify-content: center; border-radius: 9999px; background: oklch(0% 0 0 / 0.06); border: none; cursor: pointer; color: oklch(45% 0.04 195);">✕</button>
+                </form>
+            </div>
+            <div style="height: 1px; background: oklch(0% 0 0 / 0.07); margin-bottom: 1rem;"></div>
+            <div id="hours-loading" style="text-align: center; padding: 1rem; font-size: 0.875rem; color: oklch(55% 0.04 195);">Loading...</div>
+            <div id="hours-content" style="display: none;">
+                <div style="margin-bottom: 1rem;">
+                    <p style="font-size: 0.65rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: oklch(55% 0.04 195); margin-bottom: 0.5rem;">This Week <span id="hours-week-range" style="font-weight: 400; text-transform: none; letter-spacing: 0;"></span></p>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+                        <div style="padding: 0.75rem 1rem; border-radius: 0.75rem; background: oklch(94% 0.05 168 / 0.3);">
+                            <p style="font-size: 0.7rem; color: oklch(55% 0.04 195); margin-bottom: 0.2rem;">Clocked</p>
+                            <p id="hours-week-worked" style="font-size: 1rem; font-weight: 600; color: oklch(28% 0.04 195);"></p>
+                        </div>
+                        <div style="padding: 0.75rem 1rem; border-radius: 0.75rem; background: oklch(94% 0.03 195 / 0.3);">
+                            <p style="font-size: 0.7rem; color: oklch(55% 0.04 195); margin-bottom: 0.2rem;">Scheduled</p>
+                            <p id="hours-week-scheduled" style="font-size: 1rem; font-weight: 600; color: oklch(28% 0.04 195);"></p>
+                        </div>
+                    </div>
+                </div>
+                <div>
+                    <p style="font-size: 0.65rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: oklch(55% 0.04 195); margin-bottom: 0.5rem;">This Month <span id="hours-month-range" style="font-weight: 400; text-transform: none; letter-spacing: 0;"></span></p>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+                        <div style="padding: 0.75rem 1rem; border-radius: 0.75rem; background: oklch(94% 0.05 168 / 0.3);">
+                            <p style="font-size: 0.7rem; color: oklch(55% 0.04 195); margin-bottom: 0.2rem;">Clocked</p>
+                            <p id="hours-month-worked" style="font-size: 1rem; font-weight: 600; color: oklch(28% 0.04 195);"></p>
+                        </div>
+                        <div style="padding: 0.75rem 1rem; border-radius: 0.75rem; background: oklch(94% 0.03 195 / 0.3);">
+                            <p style="font-size: 0.7rem; color: oklch(55% 0.04 195); margin-bottom: 0.2rem;">Scheduled</p>
+                            <p id="hours-month-scheduled" style="font-size: 1rem; font-weight: 600; color: oklch(28% 0.04 195);"></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <form method="dialog" class="modal-backdrop"><button>close</button></form>
+    </dialog>
+
+    <script src="{% static 'js/schedule_chat.js' %}"></script>
     <script>
-        const chatBox = document.getElementById("chat-box");
-        const chatForm = document.getElementById("chat-form");
-        const chatInput = document.getElementById("chat-message");
-
-        function appendLine(who, text) {
-            chatBox.textContent += `${who}: ${text}\n\n`;
-            chatBox.scrollTop = chatBox.scrollHeight;
-        }
-
-        chatForm.addEventListener("submit", async (e) => {
-        e.preventDefault();
-
-        const text = chatInput.value.trim();
-        if (!text) return;
-
-        appendLine("You", text);
-        chatInput.value = "";
-
-        const csrfToken = chatForm.querySelector('input[name="csrfmiddlewaretoken"]').value;
-
-        const body = new URLSearchParams();
-        body.append("message", text);
-        body.append("csrfmiddlewaretoken", csrfToken);
-
-        try {
-            const res = await fetch("{% url 'schedule_chat_api' %}", {
-            method: "POST",
-            headers: { "Content-Type": "application/x-www-form-urlencoded" },
-            body: body.toString()
+        const ownerChat = initScheduleChat({
+            messagesId: 'owner-chat-messages',
+            inputId: 'owner-chat-input',
+            sendBtnId: 'owner-send-btn',
+            apiUrl: "{% url 'schedule_chat_api' %}",
         });
-            const data = await res.json();
-            appendLine("ScheduleBot", data.answer || "Something went wrong.");
-        } catch (err) {
-            appendLine("ScheduleBot", "Error contacting server.");
+        function clearOwnerChat() { ownerChat.clearChat(); }
+    </script>
+
+    <script>
+        function showHours(btn) {
+            const branchId = btn.dataset.branch;
+            const userId = btn.dataset.user;
+            const modal = document.getElementById('hours-modal');
+            document.getElementById('hours-loading').style.display = 'block';
+            document.getElementById('hours-content').style.display = 'none';
+            document.getElementById('hours-name').textContent = '';
+            modal.showModal();
+            fetch(`/branches/${branchId}/staff/${userId}/hours.json`)
+                .then(r => r.json())
+                .then(d => {
+                    document.getElementById('hours-name').textContent = d.name;
+                    document.getElementById('hours-week-range').textContent = `(${d.week_start} – ${d.week_end})`;
+                    document.getElementById('hours-month-range').textContent = `(${d.month_start} – ${d.month_end})`;
+                    document.getElementById('hours-week-worked').textContent = d.week_worked;
+                    document.getElementById('hours-week-scheduled').textContent = d.week_scheduled;
+                    document.getElementById('hours-month-worked').textContent = d.month_worked;
+                    document.getElementById('hours-month-scheduled').textContent = d.month_scheduled;
+                    document.getElementById('hours-loading').style.display = 'none';
+                    document.getElementById('hours-content').style.display = 'block';
+                });
         }
-        });
     </script>
 </body>
 

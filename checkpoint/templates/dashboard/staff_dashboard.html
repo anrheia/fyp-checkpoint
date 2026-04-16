@@ -1,83 +1,293 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Your Dashboard</title>
-
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@5" rel="stylesheet" type="text/css" />
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <link rel="stylesheet" href="{% static 'css/checkpoint.css' %}">
+    <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0&icon_names=logout" />
     <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500&family=Fraunces:wght@700;900&display=swap" rel="stylesheet">
+    <title>Your Dashboard</title>
 </head>
-<body>
-    <h1>Welcome to your Dashboard</h1>
-    <p>Temporary dashboard for staff users.</p>
+<body data-theme="checkpoint">
+    <div class="bg-mesh"></div>
 
-    {% if messages %}
-    <ul>
-        {% for message in messages %}
-        <li>{{ message }}</li>
-        {% endfor %}
-    </ul>
-    {% endif %}
+    <div class="page">
+        <nav>
+            <div class="navbar shadow-sm rounded-box" style="background: oklch(99% 0 0 / 0.45); backdrop-filter: blur(20px);">
+                <div class="navbar-start">
+                    <span class="nav-logo" style="padding: 0.75rem;">CheckPoint</span>
+                </div>
+                <div class="navbar-center hidden sm:flex">
+                    <span class="subtitle">{{ request.user.first_name|default:request.user.username }}'s Dashboard</span>
+                </div>
+                <div class="navbar-end">
+                    <form method="post" action="{% url 'logout' %}">
+                        {% csrf_token %}
+                        <button type="submit" style="padding: 1rem; color: oklch(28% 0.04 195)">
+                            <span class="material-symbols-outlined">logout</span>
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </nav>
 
+        <div class="page-content">
 
-    {% if business %}
-    <p>Branch: <strong>{{ business.name }}</strong></p>
+            {% if messages %}
+            <div style="margin-bottom: 1rem;">
+                {% for message in messages %}
+                {% if 'success' in message.tags %}
+                <div class="auto-fade-banner" style="padding: 0.75rem 1rem; border-radius: 0.75rem; margin-bottom: 0.5rem; background: oklch(94% 0.05 168 / 0.35); border: 1px solid oklch(70% 0.12 168 / 0.35); transition: opacity 0.6s ease, margin 0.6s ease, padding 0.6s ease, max-height 0.6s ease; overflow: hidden;">
+                    <p style="font-size: 0.875rem; color: oklch(35% 0.12 168); margin: 0;">{{ message }}</p>
+                </div>
+                {% else %}
+                <div class="auto-fade-banner" style="padding: 0.75rem 1rem; border-radius: 0.75rem; margin-bottom: 0.5rem; background: oklch(94% 0.04 25 / 0.3); border: 1px solid oklch(70% 0.1 25 / 0.3); transition: opacity 0.6s ease, margin 0.6s ease, padding 0.6s ease, max-height 0.6s ease; overflow: hidden;">
+                    <p style="font-size: 0.875rem; color: oklch(40% 0.18 25); margin: 0;">{{ message }}</p>
+                </div>
+                {% endif %}
+                {% endfor %}
+            </div>
+            <script>
+                document.querySelectorAll('.auto-fade-banner').forEach(el => {
+                    setTimeout(() => {
+                        el.style.opacity = '0';
+                        el.style.marginBottom = '0';
+                        el.style.padding = '0';
+                        el.style.maxHeight = '0';
+                        setTimeout(() => el.remove(), 600);
+                    }, 3000);
+                });
+            </script>
+            {% endif %}
 
-    <form method="post" action="{% url 'clock_in' business.id %}" style="display:inline;">
-        {% csrf_token %}
-        <button type="submit">Clock In</button>
-    </form>
+            {% if business %}
 
-    <form method="post" action="{% url 'clock_out' business.id %}" style="display:inline;">
-        {% csrf_token %}
-        <button type="submit">Clock Out</button>
-    </form>
+            <!-- Action buttons -->
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem;">
+                <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+                    <button type="button" onclick="document.getElementById('qr-clockin-modal').showModal()" class="text-white bg-gradient-to-br from-green-400 to-blue-600 hover:bg-gradient-to-bl focus:ring-4 focus:outline-none focus:ring-green-200 font-medium text-center leading-5" style="padding: 0.35rem 0.85rem; border-radius: 9999px; border: none; cursor: pointer; font-size: 0.875rem;">Clock In</button>
+                    <button type="button" onclick="document.getElementById('qr-clockout-modal').showModal()" class="text-white bg-gradient-to-br from-orange-400 to-pink-500 hover:bg-gradient-to-bl focus:ring-4 focus:outline-none focus:ring-orange-200 font-medium text-center leading-5" style="padding: 0.35rem 0.85rem; border-radius: 9999px; border: none; cursor: pointer; font-size: 0.875rem;">Clock Out</button>
+                    <button type="button" class="text-white bg-gradient-to-br from-violet-500 to-purple-400 hover:bg-gradient-to-bl focus:ring-4 focus:outline-none focus:ring-violet-200 font-medium text-center leading-5" style="padding: 0.35rem 0.85rem; border-radius: 9999px; border: none; cursor: pointer; font-size: 0.875rem;" data-branch="{{ business.id }}" data-user="{{ request.user.id }}" onclick="showHours(this)">My Hours</button>
+                    {% if supervisors %}
+                    <button type="button" onclick="document.getElementById('message-modal').showModal()" class="text-white bg-gradient-to-br from-indigo-400 to-indigo-600 hover:bg-gradient-to-bl focus:ring-4 focus:outline-none focus:ring-indigo-200 font-medium text-center leading-5" style="padding: 0.35rem 0.85rem; border-radius: 9999px; border: none; cursor: pointer; font-size: 0.875rem;">Message</button>
+                    {% endif %}
+                </div>
+            </div>
 
-    <form method="get" action="{% url 'my_hours' business.id %}" style="display:inline;">
-        <button type="submit">View My Hours</button>
-    </form>
-    {% endif %}
+            <!-- Message modal -->
+            {% if supervisors %}
+            <dialog id="message-modal" class="modal">
+                <div class="modal-box" style="background: oklch(99% 0 0 / 0.92); backdrop-filter: blur(24px); border: 1px solid oklch(0% 0 0 / 0.08); box-shadow: 0 20px 60px oklch(0% 0 0 / 0.12); border-radius: 1.25rem; padding: 1.75rem; max-width: 28rem;">
+                    <div style="display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 1.25rem;">
+                        <div>
+                            <p style="font-size: 0.65rem; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: oklch(55% 0.04 195); margin-bottom: 0.2rem;">{{ business.name }}</p>
+                            <h3 style="font-family: 'Fraunces', serif; font-weight: 700; font-size: 1.2rem; letter-spacing: -0.02em; color: oklch(28% 0.04 195); margin: 0;">Send a Message</h3>
+                        </div>
+                        <form method="dialog">
+                            <button style="width: 2rem; height: 2rem; display: flex; align-items: center; justify-content: center; border-radius: 9999px; background: oklch(0% 0 0 / 0.06); border: none; cursor: pointer; color: oklch(45% 0.04 195);" onmouseover="this.style.background='oklch(0% 0 0 / 0.1)'" onmouseout="this.style.background='oklch(0% 0 0 / 0.06)'">✕</button>
+                        </form>
+                    </div>
+                    <div style="height: 1px; background: oklch(0% 0 0 / 0.07); margin-bottom: 1.25rem;"></div>
+                    <form method="post" action="{% url 'send_staff_message' business.id %}">
+                        {% csrf_token %}
+                        <div style="display: flex; flex-direction: column; gap: 0.85rem; margin-bottom: 1.5rem;">
+                            <!-- To -->
+                            <div style="display: flex; flex-direction: column; gap: 0.3rem;">
+                                <label style="font-size: 0.75rem; font-weight: 500; color: oklch(40% 0.04 195);">To</label>
+                                <select name="recipient_id" required style="display: block; width: 100%; background: white; border: 1.5px solid oklch(82% 0.03 195); border-radius: 0.75rem; padding: 0.5rem 0.75rem; font-family: 'DM Sans', sans-serif; font-size: 0.875rem; color: oklch(28% 0.04 195); outline: none; box-sizing: border-box; cursor: pointer;">
+                                    {% for m in supervisors %}
+                                    <option value="{{ m.user.id }}">{{ m.user.get_full_name|default:m.user.username }} ({{ m.get_role_display }})</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <!-- Subject -->
+                            <div style="display: flex; flex-direction: column; gap: 0.3rem;">
+                                <label style="font-size: 0.75rem; font-weight: 500; color: oklch(40% 0.04 195);">Subject</label>
+                                <input type="text" name="subject" required placeholder="e.g. Shift swap request" list="subject-suggestions" style="display: block; width: 100%; background: white; border: 1.5px solid oklch(82% 0.03 195); border-radius: 0.75rem; padding: 0.5rem 0.75rem; font-family: 'DM Sans', sans-serif; font-size: 0.875rem; color: oklch(28% 0.04 195); outline: none; box-sizing: border-box;">
+                                <datalist id="subject-suggestions">
+                                    <option value="Shift swap request">
+                                    <option value="Time off request">
+                                    <option value="Sick day notice">
+                                    <option value="Late arrival notice">
+                                    <option value="General enquiry">
+                                </datalist>
+                            </div>
+                            <!-- Message -->
+                            <div style="display: flex; flex-direction: column; gap: 0.3rem;">
+                                <label style="font-size: 0.75rem; font-weight: 500; color: oklch(40% 0.04 195);">Message</label>
+                                <textarea name="message" required rows="4" placeholder="Write your message here..." style="display: block; width: 100%; background: white; border: 1.5px solid oklch(82% 0.03 195); border-radius: 0.75rem; padding: 0.5rem 0.75rem; font-family: 'DM Sans', sans-serif; font-size: 0.875rem; color: oklch(28% 0.04 195); outline: none; box-sizing: border-box; resize: vertical;"></textarea>
+                            </div>
+                        </div>
+                        <div style="display: flex; justify-content: flex-end; gap: 0.5rem;">
+                            <form method="dialog" style="display: inline;">
+                                <button type="submit" style="font-size: 0.875rem; padding: 0.45rem 1rem; border-radius: 9999px; background: oklch(94% 0.02 195 / 0.6); border: 1px solid oklch(0% 0 0 / 0.1); color: oklch(40% 0.04 195); cursor: pointer; font-family: 'DM Sans', sans-serif;">Cancel</button>
+                            </form>
+                            <button type="submit" class="text-white bg-gradient-to-br from-violet-500 to-purple-400 hover:bg-gradient-to-bl focus:ring-4 focus:outline-none focus:ring-violet-200 font-medium text-center leading-5" style="font-size: 0.875rem; padding: 0.45rem 1.25rem; border-radius: 9999px; border: none; cursor: pointer;">Send</button>
+                        </div>
+                    </form>
+                </div>
+                <form method="dialog" class="modal-backdrop"><button>close</button></form>
+            </dialog>
+            {% endif %}
 
-    {% block content %}
-        <h2>Your Clock-In QR Code</h2>
-        <p>Show this to your supervisor to clock in or out. It refreshes after each scan.</p>
-        <img src="{% url 'my_qr_code' business.id %}" alt="Your QR Code" style="max-width:300px;">
-        <p><small>Each scan generates a new code for security.</small></p>
-    {% endblock %}
+            <!-- Clock In QR modal -->
+            <dialog id="qr-clockin-modal" class="modal">
+                <div class="modal-box" style="background: oklch(99% 0 0 / 0.92); backdrop-filter: blur(24px); border: 1px solid oklch(0% 0 0 / 0.08); border-radius: 1.25rem; padding: 1.75rem; max-width: 22rem;">
+                    <div style="display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 1rem;">
+                        <div>
+                            <p style="font-size: 0.65rem; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: oklch(55% 0.04 195); margin-bottom: 0.2rem;">Show to supervisor</p>
+                            <h3 style="font-family: 'Fraunces', serif; font-weight: 700; font-size: 1.2rem; letter-spacing: -0.02em; color: oklch(28% 0.04 195); margin: 0;">Clock In</h3>
+                        </div>
+                        <form method="dialog">
+                            <button style="width: 2rem; height: 2rem; display: flex; align-items: center; justify-content: center; border-radius: 9999px; background: oklch(0% 0 0 / 0.06); border: none; cursor: pointer; color: oklch(45% 0.04 195);" onmouseover="this.style.background='oklch(0% 0 0 / 0.1)'" onmouseout="this.style.background='oklch(0% 0 0 / 0.06)'">✕</button>
+                        </form>
+                    </div>
+                    <div style="height: 1px; background: oklch(0% 0 0 / 0.07); margin-bottom: 1.25rem;"></div>
+                    <div style="display: flex; justify-content: center;">
+                        <img src="{% url 'my_qr_code' business.id %}" alt="Clock In QR Code" style="width: 100%; max-width: 220px; border-radius: 0.75rem;">
+                    </div>
+                    <div style="margin-top: 1rem; padding: 0.75rem 1rem; background: oklch(96% 0.02 195 / 0.6); border: 1px solid oklch(0% 0 0 / 0.07); border-radius: 0.75rem; text-align: center;">
+                        <p style="font-size: 0.65rem; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: oklch(55% 0.04 195); margin-bottom: 0.35rem;">Fallback code</p>
+                        <p style="font-family: 'DM Sans', monospace; font-size: 1.6rem; font-weight: 700; letter-spacing: 0.25em; color: oklch(28% 0.04 195);">{{ pin_code }}</p>
+                    </div>
+                    <p style="font-size: 0.75rem; text-align: center; color: oklch(65% 0.04 195); margin-top: 0.75rem;">Each scan generates a new code for security.</p>
+                </div>
+                <form method="dialog" class="modal-backdrop"><button>close</button></form>
+            </dialog>
 
-    <h2>Your Schedule</h2>
-    <div id="calendar"></div>   
+            <!-- Clock Out QR modal -->
+            <dialog id="qr-clockout-modal" class="modal">
+                <div class="modal-box" style="background: oklch(99% 0 0 / 0.92); backdrop-filter: blur(24px); border: 1px solid oklch(0% 0 0 / 0.08); border-radius: 1.25rem; padding: 1.75rem; max-width: 22rem;">
+                    <div style="display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 1rem;">
+                        <div>
+                            <p style="font-size: 0.65rem; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: oklch(55% 0.04 195); margin-bottom: 0.2rem;">Show to supervisor</p>
+                            <h3 style="font-family: 'Fraunces', serif; font-weight: 700; font-size: 1.2rem; letter-spacing: -0.02em; color: oklch(28% 0.04 195); margin: 0;">Clock Out</h3>
+                        </div>
+                        <form method="dialog">
+                            <button style="width: 2rem; height: 2rem; display: flex; align-items: center; justify-content: center; border-radius: 9999px; background: oklch(0% 0 0 / 0.06); border: none; cursor: pointer; color: oklch(45% 0.04 195);" onmouseover="this.style.background='oklch(0% 0 0 / 0.1)'" onmouseout="this.style.background='oklch(0% 0 0 / 0.06)'">✕</button>
+                        </form>
+                    </div>
+                    <div style="height: 1px; background: oklch(0% 0 0 / 0.07); margin-bottom: 1.25rem;"></div>
+                    <div style="display: flex; justify-content: center;">
+                        <img src="{% url 'my_qr_code' business.id %}" alt="Clock Out QR Code" style="width: 100%; max-width: 220px; border-radius: 0.75rem;">
+                    </div>
+                    <div style="margin-top: 1rem; padding: 0.75rem 1rem; background: oklch(96% 0.02 195 / 0.6); border: 1px solid oklch(0% 0 0 / 0.07); border-radius: 0.75rem; text-align: center;">
+                        <p style="font-size: 0.65rem; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: oklch(55% 0.04 195); margin-bottom: 0.35rem;">Fallback code</p>
+                        <p style="font-family: 'DM Sans', monospace; font-size: 1.6rem; font-weight: 700; letter-spacing: 0.25em; color: oklch(28% 0.04 195);">{{ pin_code }}</p>
+                    </div>
+                    <p style="font-size: 0.75rem; text-align: center; color: oklch(65% 0.04 195); margin-top: 0.75rem;">Each scan generates a new code for security.</p>
+                </div>
+                <form method="dialog" class="modal-backdrop"><button>close</button></form>
+            </dialog>
 
-    <hr>
+            <!-- Calendar card -->
+            <div style="background: oklch(99% 0 0 / 0.65); backdrop-filter: blur(20px); border: 1px solid oklch(0% 0 0 / 0.07); box-shadow: 0 8px 32px oklch(0% 0 0 / 0.06); border-radius: 1rem; padding: 1.5rem;">
+                <div id="calendar"></div>
+            </div>
 
-    <form method="post" action="{% url 'logout' %}">
-        {% csrf_token %}
-        <button type="submit">Log out</button>
-    </form>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Hours modal -->
+    <dialog id="hours-modal" class="modal">
+        <div class="modal-box" style="background: oklch(99% 0 0 / 0.92); backdrop-filter: blur(24px); border: 1px solid oklch(0% 0 0 / 0.08); border-radius: 1.25rem; padding: 1.75rem; max-width: 26rem;">
+            <div style="display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 1.25rem;">
+                <div>
+                    <p style="font-size: 0.65rem; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: oklch(55% 0.04 195); margin-bottom: 0.2rem;">Work Hours</p>
+                    <h3 id="hours-name" style="font-family: 'Fraunces', serif; font-weight: 700; font-size: 1.15rem; color: oklch(28% 0.04 195); margin: 0;"></h3>
+                </div>
+                <form method="dialog">
+                    <button style="width: 2rem; height: 2rem; display: flex; align-items: center; justify-content: center; border-radius: 9999px; background: oklch(0% 0 0 / 0.06); border: none; cursor: pointer; color: oklch(45% 0.04 195);">✕</button>
+                </form>
+            </div>
+            <div style="height: 1px; background: oklch(0% 0 0 / 0.07); margin-bottom: 1rem;"></div>
+            <div id="hours-loading" style="text-align: center; padding: 1rem; font-size: 0.875rem; color: oklch(55% 0.04 195);">Loading...</div>
+            <div id="hours-content" style="display: none;">
+                <div style="margin-bottom: 1rem;">
+                    <p style="font-size: 0.65rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: oklch(55% 0.04 195); margin-bottom: 0.5rem;">This Week <span id="hours-week-range" style="font-weight: 400; text-transform: none; letter-spacing: 0;"></span></p>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+                        <div style="padding: 0.75rem 1rem; border-radius: 0.75rem; background: oklch(94% 0.05 168 / 0.3);">
+                            <p style="font-size: 0.7rem; color: oklch(55% 0.04 195); margin-bottom: 0.2rem;">Clocked</p>
+                            <p id="hours-week-worked" style="font-size: 1rem; font-weight: 600; color: oklch(28% 0.04 195);"></p>
+                        </div>
+                        <div style="padding: 0.75rem 1rem; border-radius: 0.75rem; background: oklch(94% 0.03 195 / 0.3);">
+                            <p style="font-size: 0.7rem; color: oklch(55% 0.04 195); margin-bottom: 0.2rem;">Scheduled</p>
+                            <p id="hours-week-scheduled" style="font-size: 1rem; font-weight: 600; color: oklch(28% 0.04 195);"></p>
+                        </div>
+                    </div>
+                </div>
+                <div>
+                    <p style="font-size: 0.65rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: oklch(55% 0.04 195); margin-bottom: 0.5rem;">This Month <span id="hours-month-range" style="font-weight: 400; text-transform: none; letter-spacing: 0;"></span></p>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+                        <div style="padding: 0.75rem 1rem; border-radius: 0.75rem; background: oklch(94% 0.05 168 / 0.3);">
+                            <p style="font-size: 0.7rem; color: oklch(55% 0.04 195); margin-bottom: 0.2rem;">Clocked</p>
+                            <p id="hours-month-worked" style="font-size: 1rem; font-weight: 600; color: oklch(28% 0.04 195);"></p>
+                        </div>
+                        <div style="padding: 0.75rem 1rem; border-radius: 0.75rem; background: oklch(94% 0.03 195 / 0.3);">
+                            <p style="font-size: 0.7rem; color: oklch(55% 0.04 195); margin-bottom: 0.2rem;">Scheduled</p>
+                            <p id="hours-month-scheduled" style="font-size: 1rem; font-weight: 600; color: oklch(28% 0.04 195);"></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <form method="dialog" class="modal-backdrop"><button>close</button></form>
+    </dialog>
+
     <script>
-    document.addEventListener('DOMContentLoaded', function () {
-        const calendarEl = document.getElementById('calendar');
-
-        const calendar = new FullCalendar.Calendar(calendarEl, {
-            initialView: 'timeGridWeek',
-            height: 'auto',
-            nowIndicator: true,
-
-            events: "{% url 'staff_branch_shifts_json' business.id %}",
-
-            editable: false,
-            selectable: false,
-            eventStartEditable: false,
-            eventDurationEditable: false,
-
-            eventClick: function(info) {
-                info.jsEvent.preventDefault();
-            }
+        document.addEventListener('DOMContentLoaded', function () {
+            const isMobile = () => window.innerWidth < 768;
+            const calendar = new FullCalendar.Calendar(document.getElementById('calendar'), {
+                initialView: isMobile() ? 'listWeek' : 'timeGridWeek',
+                headerToolbar: isMobile()
+                    ? { left: 'prev,next', center: 'title', right: 'today' }
+                    : { left: 'prev,next today', center: 'title', right: 'timeGridWeek,timeGridDay' },
+                height: 'auto',
+                nowIndicator: true,
+                events: "{% url 'staff_branch_shifts_json' business.id %}",
+                windowResize: function() {
+                    calendar.changeView(isMobile() ? 'listWeek' : 'timeGridWeek');
+                    calendar.setOption('headerToolbar', isMobile()
+                        ? { left: 'prev,next', center: 'title', right: 'today' }
+                        : { left: 'prev,next today', center: 'title', right: 'timeGridWeek,timeGridDay' }
+                    );
+                },
+            });
+            calendar.render();
         });
 
-        calendar.render();
-    });
+        function showHours(btn) {
+            const branchId = btn.dataset.branch;
+            const userId = btn.dataset.user;
+            const modal = document.getElementById('hours-modal');
+            document.getElementById('hours-loading').style.display = 'block';
+            document.getElementById('hours-content').style.display = 'none';
+            document.getElementById('hours-name').textContent = '';
+            modal.showModal();
+            fetch(`/branches/${branchId}/staff/${userId}/hours.json`)
+                .then(r => r.json())
+                .then(d => {
+                    document.getElementById('hours-name').textContent = d.name;
+                    document.getElementById('hours-week-range').textContent = `(${d.week_start} – ${d.week_end})`;
+                    document.getElementById('hours-month-range').textContent = `(${d.month_start} – ${d.month_end})`;
+                    document.getElementById('hours-week-worked').textContent = d.week_worked;
+                    document.getElementById('hours-week-scheduled').textContent = d.week_scheduled;
+                    document.getElementById('hours-month-worked').textContent = d.month_worked;
+                    document.getElementById('hours-month-scheduled').textContent = d.month_scheduled;
+                    document.getElementById('hours-loading').style.display = 'none';
+                    document.getElementById('hours-content').style.display = 'block';
+                });
+        }
+
     </script>
 </body>
 </html>

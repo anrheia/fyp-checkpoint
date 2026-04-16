@@ -1,0 +1,188 @@
+@page {
+  size: A4 portrait;
+  margin: 1.5cm 2cm 1.5cm 2cm;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 9pt;
+  color: #1a2e3b;
+  background: #fff;
+}
+
+.page {
+  width: 100%;
+}
+
+/* ── Header ─────────────────────────────── */
+.report-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  border-bottom: 2px solid #1a2e3b;
+  padding-bottom: 0.6cm;
+  margin-bottom: 0.7cm;
+}
+.report-header .brand {
+  font-size: 18pt;
+  font-weight: 700;
+  color: #1a2e3b;
+  letter-spacing: -0.02em;
+}
+.report-header .branch {
+  font-size: 11pt;
+  font-weight: 500;
+  color: #1a2e3b;
+  margin-top: 2px;
+}
+.report-header .meta {
+  text-align: right;
+  font-size: 8pt;
+  color: #5a6e7a;
+  line-height: 1.6;
+}
+
+/* ── Summary strip ───────────────────────── */
+.summary-strip {
+  display: flex;
+  gap: 0.4cm;
+  margin-bottom: 0.7cm;
+  page-break-inside: avoid;
+}
+
+.branch-section {
+  page-break-inside: avoid;
+}
+.summary-card {
+  flex: 1;
+  border: 1px solid #dde4e8;
+  border-radius: 6px;
+  padding: 0.3cm 0.4cm;
+}
+.summary-card .label {
+  font-size: 7pt;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #7a8e9a;
+  margin-bottom: 2px;
+}
+.summary-card .value {
+  font-size: 13pt;
+  font-weight: 700;
+  color: #1a2e3b;
+}
+
+/* ── Branch heading (owner report) ──────── */
+.branch-heading {
+  font-size: 12pt;
+  font-weight: 700;
+  color: #1a2e3b;
+  border-left: 4px solid #1a2e3b;
+  padding-left: 0.3cm;
+  margin-bottom: 0.4cm;
+  margin-top: 0.6cm;
+}
+
+/* ── Staff block ─────────────────────────── */
+.staff-block {
+  margin-bottom: 0.6cm;
+  page-break-inside: avoid;
+}
+.staff-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  background: #f0f4f7;
+  border-radius: 5px 5px 0 0;
+  padding: 0.2cm 0.35cm;
+}
+.staff-name {
+  font-size: 10pt;
+  font-weight: 600;
+  color: #1a2e3b;
+}
+.staff-meta {
+  font-size: 8pt;
+  color: #5a6e7a;
+}
+.staff-stats {
+  font-size: 8pt;
+  color: #5a6e7a;
+  display: flex;
+  gap: 0.5cm;
+}
+
+/* ── Table ───────────────────────────────── */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 8.5pt;
+}
+thead tr {
+  background: #e8edf0;
+}
+thead th {
+  text-align: left;
+  padding: 0.15cm 0.3cm;
+  font-size: 7.5pt;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #5a6e7a;
+}
+tbody tr:nth-child(even) { background: #f8fafb; }
+tbody td {
+  padding: 0.15cm 0.3cm;
+  border-bottom: 1px solid #edf1f3;
+  color: #1a2e3b;
+}
+
+.late-badge {
+  display: inline-block;
+  background: #fdecea;
+  color: #c0392b;
+  border-radius: 3px;
+  padding: 1px 5px;
+  font-size: 7.5pt;
+  font-weight: 600;
+}
+.on-time {
+  color: #27ae60;
+  font-weight: 500;
+}
+
+.no-entries {
+  padding: 0.2cm 0.35cm;
+  font-size: 8pt;
+  color: #9aabb5;
+  border: 1px solid #dde4e8;
+  border-top: none;
+  border-radius: 0 0 5px 5px;
+}
+
+.staff-footer {
+  background: #f0f4f7;
+  border-radius: 0 0 5px 5px;
+  padding: 0.15cm 0.35cm;
+  display: flex;
+  gap: 1cm;
+  font-size: 8pt;
+  color: #1a2e3b;
+  border: 1px solid #dde4e8;
+  border-top: none;
+}
+.staff-footer strong { font-weight: 600; }
+
+/* ── Footer ──────────────────────────────── */
+.report-footer {
+  margin-top: 0.8cm;
+  border-top: 1px solid #dde4e8;
+  padding-top: 0.3cm;
+  font-size: 7.5pt;
+  color: #9aabb5;
+  display: flex;
+  justify-content: space-between;
+}

@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+</head>
+<body>
+<div class="page">
+
+  <div class="report-header">
+    <div>
+      <div class="brand">CheckPoint</div>
+      <div class="branch">{{ business.name }} — Hours Report</div>
+    </div>
+    <div class="meta">
+      Period: {{ from_date|date:"d M Y" }} – {{ to_date|date:"d M Y" }}<br>
+      Generated: {{ generated }}<br>
+      Branch report
+    </div>
+  </div>
+
+  <div class="summary-strip">
+    <div class="summary-card">
+      <div class="label">Staff Members</div>
+      <div class="value">{{ staff_data|length }}</div>
+    </div>
+    <div class="summary-card">
+      <div class="label">Total Shifts</div>
+      <div class="value">{{ total_shifts }}</div>
+    </div>
+    <div class="summary-card">
+      <div class="label">Total Hours Worked</div>
+      <div class="value">{{ total_hours }}</div>
+    </div>
+    <div class="summary-card">
+      <div class="label">Late Arrivals (&gt;15 min)</div>
+      <div class="value">{{ total_lates }}</div>
+    </div>
+  </div>
+
+  {% for staff in staff_data %}
+  <div class="staff-block">
+    <div class="staff-header">
+      <div>
+        <span class="staff-name">{{ staff.name }}</span>
+        {% if staff.position %}<span class="staff-meta"> · {{ staff.position }}</span>{% endif %}
+        <span class="staff-meta"> · {{ staff.role }}</span>
+      </div>
+      <div class="staff-stats">
+        <span>{{ staff.shift_count }} shift{{ staff.shift_count|pluralize }}</span>
+        <span>{{ staff.total_hours }}</span>
+        {% if staff.late_count %}<span style="color:#c0392b;">{{ staff.late_count }} late</span>{% endif %}
+      </div>
+    </div>
+
+    {% if staff.entries %}
+    <table>
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Shift Start</th>
+          <th>Clock In</th>
+          <th>Clock Out</th>
+          <th>Duration</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for entry in staff.entries %}
+        <tr>
+          <td>{{ entry.date }}</td>
+          <td>{{ entry.shift_start }}</td>
+          <td>{{ entry.clock_in }}</td>
+          <td>{{ entry.clock_out }}</td>
+          <td>{{ entry.duration }}</td>
+          <td>
+            {% if entry.is_late %}
+              <span class="late-badge">+{{ entry.minutes_late }} min late</span>
+            {% else %}
+              <span class="on-time">On time</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <div class="staff-footer">
+      <span><strong>Total worked:</strong> {{ staff.total_hours }}</span>
+      <span><strong>Late arrivals:</strong> {{ staff.late_count }}</span>
+    </div>
+    {% else %}
+    <div class="no-entries">No completed shifts in this period.</div>
+    {% endif %}
+  </div>
+  {% endfor %}
+
+  <div class="report-footer">
+    <span>CheckPoint · {{ business.name }}</span>
+    <span>{{ from_date|date:"d M Y" }} – {{ to_date|date:"d M Y" }} · Generated {{ generated }}</span>
+  </div>
+
+</div>
+</body>
+</html>
