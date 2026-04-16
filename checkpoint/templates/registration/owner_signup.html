@@ -52,13 +52,35 @@
 
                     <div style="display: flex; flex-direction: column; gap: 0.25rem;">
                         <label style="font-size: 0.75rem; font-weight: 500; color: oklch(40% 0.04 195);">Password</label>
-                        {{ form.password1 }}
+                        <div style="position: relative;">
+                            {{ form.password1 }}
+                            <button type="button"
+                                onmousedown="this.previousElementSibling.type='text'"
+                                onmouseup="this.previousElementSibling.type='password'"
+                                onmouseleave="this.previousElementSibling.type='password'"
+                                ontouchstart="this.previousElementSibling.type='text';return false;"
+                                ontouchend="this.previousElementSibling.type='password'"
+                                style="position: absolute; right: 0.6rem; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; padding: 0.25rem; color: oklch(55% 0.04 195); display: flex; align-items: center; line-height: 1;">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                            </button>
+                        </div>
                         {% for error in form.password1.errors %}<p style="font-size: 0.72rem; color: oklch(50% 0.18 25); margin-top: 0.15rem;">{{ error }}</p>{% endfor %}
                     </div>
 
                     <div style="display: flex; flex-direction: column; gap: 0.25rem;">
                         <label style="font-size: 0.75rem; font-weight: 500; color: oklch(40% 0.04 195);">Confirm Password</label>
-                        {{ form.password2 }}
+                        <div style="position: relative;">
+                            {{ form.password2 }}
+                            <button type="button"
+                                onmousedown="this.previousElementSibling.type='text'"
+                                onmouseup="this.previousElementSibling.type='password'"
+                                onmouseleave="this.previousElementSibling.type='password'"
+                                ontouchstart="this.previousElementSibling.type='text';return false;"
+                                ontouchend="this.previousElementSibling.type='password'"
+                                style="position: absolute; right: 0.6rem; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; padding: 0.25rem; color: oklch(55% 0.04 195); display: flex; align-items: center; line-height: 1;">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                            </button>
+                        </div>
                         {% for error in form.password2.errors %}<p style="font-size: 0.72rem; color: oklch(50% 0.18 25); margin-top: 0.15rem;">{{ error }}</p>{% endfor %}
                     </div>
 

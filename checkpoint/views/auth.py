@@ -28,7 +28,7 @@ def owner_signup(request):
                 role=BusinessMembership.OWNER
             )
             login(request, user)
-            return redirect('home')
+            return redirect('dashboard')
     else:
         form = OwnerSignUpForm()
     return render(request, 'registration/owner_signup.html', {'form': form})
