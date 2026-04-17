@@ -17,6 +17,7 @@ User = get_user_model()
 
 @login_required
 def branch_schedule(request, business_id):
+    # Renders the schedule management page; also shows how many unsent shift notifications are pending
     _, business, error_response = get_supervisor_membership(request, business_id, json=True)
 
     if error_response:
@@ -50,6 +51,7 @@ def branch_schedule(request, business_id):
 
 @login_required
 def branch_shifts_json(request, business_id):
+    # JSON endpoint that feeds all branch shifts to the schedule calendar
     _, business, error_response = get_supervisor_membership(request, business_id, json=True)
 
     if error_response:
@@ -67,6 +69,7 @@ def branch_shifts_json(request, business_id):
 
 @login_required
 def create_shift(request, business_id):
+    # Creates a shift and queues it in the session for notification; notification is not sent until explicitly triggered
     membership, business, error_response = get_supervisor_membership(request, business_id)
     if error_response:
         return error_response
@@ -104,6 +107,7 @@ def create_shift(request, business_id):
 
 @login_required
 def delete_shift(request, business_id, shift_id):
+    # Deletes a shift; emails the employee only if the shift had already been notified (not in pending queue)
     _, business, error_response = get_supervisor_membership(request, business_id)
     if error_response:
         return error_response
@@ -142,6 +146,7 @@ def delete_shift(request, business_id, shift_id):
 
 @login_required
 def pending_shift_notifications(request, business_id):
+    # Shows the review page listing all shifts queued for notification, grouped by employee
     _, business, error_response = get_supervisor_membership(request, business_id)
     if error_response:
         return error_response
@@ -169,6 +174,7 @@ def pending_shift_notifications(request, business_id):
 @login_required
 @require_POST
 def send_shift_notifications(request, business_id):
+    # Emails each employee their pending shifts in one batch, then clears the notification queue
     _, business, error_response = get_supervisor_membership(request, business_id)
     if error_response:
         return error_response

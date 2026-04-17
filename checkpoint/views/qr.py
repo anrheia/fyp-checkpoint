@@ -16,6 +16,7 @@ from ..utils import get_membership, get_supervisor_membership
 
 @login_required
 def my_qr_code(request, business_id):
+    # Returns the staff member's personal QR code as a PNG image
     membership, business, error_response = get_membership(request, business_id)
     if error_response:
         return error_response
@@ -32,6 +33,7 @@ def my_qr_code(request, business_id):
 
 @login_required
 def qr_scanner(request, business_id):
+    # Renders the supervisor QR scanner page; owner/supervisor access only
     membership, business, error_response = get_supervisor_membership(request, business_id)
     if error_response:
         return error_response
@@ -42,6 +44,7 @@ def qr_scanner(request, business_id):
 @require_POST
 @csrf_protect
 def process_qr_scan(request, token):
+    # Clocks the employee in or out based on their current state; rotates QR token and PIN after every scan
     if not request.user.is_authenticated:
         return JsonResponse({"error": "Authentication required."}, status=401)
 
@@ -114,6 +117,7 @@ def process_qr_scan(request, token):
 @require_POST
 @csrf_protect
 def process_pin_scan(request):
+    # Same clock-in/out logic as process_qr_scan but identified by PIN code instead of QR token
     if not request.user.is_authenticated:
         return JsonResponse({"error": "Authentication required."}, status=401)
 

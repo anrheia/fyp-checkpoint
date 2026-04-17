@@ -259,6 +259,7 @@ def compute_staff_status(business, minutes=15):
         "not_scheduled": not_scheduled,
         "now": now
     }
+
 # Utility function to find the next date for a given weekday, used in schedule query parsing.
 
 def next_weekday(start_date, target_weekday, *, include_today=False):

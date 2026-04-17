@@ -27,6 +27,7 @@ DAILY_CHAT_LIMIT = 30
 
 
 def _chat_usage_today(request):
+    # Session key is date-scoped so the count resets automatically each day
     key = f'chat_{timezone.localdate().isoformat()}'
     return request.session.get(key, 0), key
 
@@ -39,6 +40,7 @@ def _increment_chat_usage(request):
 
 @login_required
 def schedule_chat(request):
+    # Standalone chat page (counter passed so the template can display remaining uses)
     used, _ = _chat_usage_today(request)
     return render(request, 'dashboard/schedule_chat.html', {
         'chat_limit': DAILY_CHAT_LIMIT,
@@ -50,6 +52,7 @@ def schedule_chat(request):
 @require_POST
 @csrf_protect
 def schedule_chat_api(request):
+    # Main chat endpoint, dispatches to the matching intent handler below
     msg = (request.POST.get("message") or "").strip()
     if not msg:
         return JsonResponse({"answer": "Type: who's working next Friday in Luigi's?"})
@@ -62,7 +65,7 @@ def schedule_chat_api(request):
         })
     _increment_chat_usage(request)
 
-    # --- Intent: who is late today ---
+    # Intent: who is late today 
     if _re.search(r"\blate\b", msg, _re.IGNORECASE):
         today = timezone.localdate().isoformat()
         extracted = extract_schedule_query(msg, today)
@@ -70,7 +73,7 @@ def schedule_chat_api(request):
 
         owned_ids = BusinessMembership.objects.filter(
             user=request.user,
-            role=BusinessMembership.OWNER
+            role__in=[BusinessMembership.OWNER, BusinessMembership.SUPERVISOR]
         ).values_list("business_id", flat=True)
 
         if branch_name:
@@ -84,10 +87,10 @@ def schedule_chat_api(request):
         else:
             owned = Business.objects.filter(id__in=owned_ids).order_by("name")
             if owned.count() == 0:
-                return JsonResponse({"answer": "You don't seem to own any branches yet."})
+                return JsonResponse({"answer": "You don't seem to have access to any branches yet."})
             if owned.count() > 1:
                 options = ", ".join(owned.values_list("name", flat=True)[:8])
-                return JsonResponse({"answer": f"Which branch? You own: {options}. Ask like: who's late at Luigi's?"})
+                return JsonResponse({"answer": f"Which branch? You have access to: {options}. Ask like: who's late at Luigi's?"})
             business = owned.first()
 
         status = compute_staff_status(business)
@@ -109,6 +112,7 @@ def schedule_chat_api(request):
         answer = f"Late at {business.name} right now ({now.strftime('%H:%M')}):\n" + "\n".join(lines)
         return JsonResponse({"answer": answer})
 
+    # Intent: hours worked/scheduled for a week
     if _re.search(r"\bhours?\b", msg, _re.IGNORECASE):
         today = timezone.localdate().isoformat()
         extracted = extract_hours_query(msg, today)
@@ -117,7 +121,7 @@ def schedule_chat_api(request):
         branch_name = extracted.get("branch_name")
 
         owned_ids = BusinessMembership.objects.filter(
-            user=request.user, role=BusinessMembership.OWNER
+            user=request.user, role__in=[BusinessMembership.OWNER, BusinessMembership.SUPERVISOR]
         ).values_list("business_id", flat=True)
 
         if branch_name:
@@ -175,6 +179,7 @@ def schedule_chat_api(request):
         answer = "Hours at " + business.name + " " + week_label + " (" + date_range + "):\n" + "\n".join(lines)
         return JsonResponse({"answer": answer})
 
+    # Intent: shift count per person
     if _re.search(r"\bhow\s+many\s+shifts?\b|\bmost\s+shifts?\b|\bfewest\s+shifts?\b|\bshift\s+count\b", msg, _re.IGNORECASE):
         today_iso = timezone.localdate().isoformat()
         extracted = extract_hours_query(msg, today_iso)
@@ -183,7 +188,7 @@ def schedule_chat_api(request):
         branch_name = extracted.get("branch_name")
 
         owned_ids = BusinessMembership.objects.filter(
-            user=request.user, role=BusinessMembership.OWNER
+            user=request.user, role__in=[BusinessMembership.OWNER, BusinessMembership.SUPERVISOR]
         ).values_list("business_id", flat=True)
 
         if branch_name:
@@ -236,7 +241,7 @@ def schedule_chat_api(request):
         date_range = week_start.strftime("%d %b") + "–" + week_end.strftime("%d %b")
         return JsonResponse({"answer": f"Shift count at {business.name} {week_label} ({date_range}):\n" + "\n".join(lines)})
 
-    # --- Intent: coverage / headcount ---
+    # Intent: coverage/headcount on a given day
     if _re.search(r"\bhow many\b|\banyone\b|\bheadcount\b|\bcoverage\b", msg, _re.IGNORECASE):
         today = timezone.localdate().isoformat()
         extracted = extract_coverage_query(msg, today)
@@ -252,6 +257,7 @@ def schedule_chat_api(request):
         except Exception:
             return JsonResponse({"answer": "That date looked invalid. Try: how many staff on Saturday?"})
 
+        # Python weekday resolution overrides the AI-extracted date for named days
         weekday_idx, qualifier = extract_weekday_request(msg)
         if weekday_idx is not None:
             today_date = timezone.localdate()
@@ -264,7 +270,7 @@ def schedule_chat_api(request):
                 target_date = next_weekday(today_date, weekday_idx)
 
         owned_ids = BusinessMembership.objects.filter(
-            user=request.user, role=BusinessMembership.OWNER
+            user=request.user, role__in=[BusinessMembership.OWNER, BusinessMembership.SUPERVISOR]
         ).values_list("business_id", flat=True)
 
         if branch_name:
@@ -325,6 +331,7 @@ def schedule_chat_api(request):
         header = str(count) + " staff at " + business.name + " on " + date_label + time_label + ":"
         return JsonResponse({"answer": header + "\n" + "\n".join(lines)})
 
+    # Intent: when is a specific person working 
     if _re.search(r"\bwhen is\b|\bwhen does\b|\bwhen will\b|\bschedule for\b|\bshifts? for\b", msg, _re.IGNORECASE):
         today = timezone.localdate().isoformat()
         extracted = extract_person_schedule_query(msg, today)
@@ -346,9 +353,10 @@ def schedule_chat_api(request):
         end_dt = timezone.make_aware(datetime.combine(week_end, time.max), tz)
 
         owned_ids = BusinessMembership.objects.filter(
-            user=request.user, role=BusinessMembership.OWNER
+            user=request.user, role__in=[BusinessMembership.OWNER, BusinessMembership.SUPERVISOR]
         ).values_list("business_id", flat=True)
 
+        # Find matching staff across all accessible branches
         name_lower = person_name.lower()
         member_users = User.objects.filter(
             businessmembership__business_id__in=owned_ids
@@ -398,6 +406,7 @@ def schedule_chat_api(request):
 
         return JsonResponse({"answer": "\n\n".join(sections)})
 
+    # Intent: what position/role does someone have
     if _re.search(r"\bposition\b|\bwhat role\b", msg, _re.IGNORECASE):
         today = timezone.localdate().isoformat()
         extracted = extract_person_schedule_query(msg, today)
@@ -409,7 +418,7 @@ def schedule_chat_api(request):
 
         owned_ids = BusinessMembership.objects.filter(
             user=request.user,
-            role=BusinessMembership.OWNER
+            role__in=[BusinessMembership.OWNER, BusinessMembership.SUPERVISOR]
         ).values_list("business_id", flat=True)
 
         if branch_name:
@@ -447,6 +456,7 @@ def schedule_chat_api(request):
         header = f"Position for {person_name}:" if len(matched) == 1 else f"Positions for '{person_name}':"
         return JsonResponse({"answer": header + "\n" + "\n".join(lines)})
 
+    # Intent: who has no shifts this/next week 
     if _re.search(r"\bnot\s+(?:working|scheduled)\b|\bno\s+shifts?\b|\bwho.*\boff\b|\bdays?\s+off\b", msg, _re.IGNORECASE):
         today_iso = timezone.localdate().isoformat()
         extracted = extract_hours_query(msg, today_iso)
@@ -454,7 +464,7 @@ def schedule_chat_api(request):
         branch_name = extracted.get("branch_name")
 
         owned_ids = BusinessMembership.objects.filter(
-            user=request.user, role=BusinessMembership.OWNER
+            user=request.user, role__in=[BusinessMembership.OWNER, BusinessMembership.SUPERVISOR]
         ).values_list("business_id", flat=True)
 
         if branch_name:
@@ -502,7 +512,7 @@ def schedule_chat_api(request):
         date_range = week_start.strftime("%d %b") + "–" + week_end.strftime("%d %b")
         return JsonResponse({"answer": f"Not scheduled at {business.name} {week_label} ({date_range}):\n" + "\n".join(lines)})
 
-    # --- Intent: overlapping shifts ---
+    # Intent: overlapping shifts on a given day 
     if _re.search(r"\boverlap\b|\bsame\s+time\b|\bat\s+the\s+same\s+time\b|\bworking\s+together\b", msg, _re.IGNORECASE):
         today_iso = timezone.localdate().isoformat()
         extracted = extract_schedule_query(msg, today_iso)
@@ -533,7 +543,7 @@ def schedule_chat_api(request):
                 return JsonResponse({"answer": "Which day? Try: who's working at the same time on Saturday?"})
 
         owned_ids = BusinessMembership.objects.filter(
-            user=request.user, role=BusinessMembership.OWNER
+            user=request.user, role__in=[BusinessMembership.OWNER, BusinessMembership.SUPERVISOR]
         ).values_list("business_id", flat=True)
 
         if branch_name:
@@ -568,6 +578,7 @@ def schedule_chat_api(request):
         if len(shifts) < 2:
             return JsonResponse({"answer": f"Only one shift at {business.name} on {date_label} — no overlaps."})
 
+        # Intent: overlapping shifts on a given day
         pairs = []
         for i in range(len(shifts)):
             for j in range(i + 1, len(shifts)):
@@ -584,6 +595,7 @@ def schedule_chat_api(request):
 
         return JsonResponse({"answer": f"Overlapping shifts at {business.name} on {date_label}:\n" + "\n".join(pairs)})
 
+    # Default intent: who is working on a given day 
     today_date = timezone.localdate()
     today = today_date.isoformat()
     extracted = extract_schedule_query(msg, today)
@@ -591,7 +603,7 @@ def schedule_chat_api(request):
     iso_date = extracted.get("date")
     branch_name = extracted.get("branch_name")
 
-    # Resolve today/tomorrow/yesterday reliably in Python — GPT can miss these
+    # Resolve today/tomorrow/yesterday in Python, the AI extractor might miss them
     _relative = _re.search(r'\b(today|tomorrow|yesterday)\b', msg, _re.IGNORECASE)
     if _relative:
         _offsets = {'today': 0, 'tomorrow': 1, 'yesterday': -1}
@@ -618,7 +630,7 @@ def schedule_chat_api(request):
 
     owned_ids = BusinessMembership.objects.filter(
         user=request.user,
-        role=BusinessMembership.OWNER
+        role__in=[BusinessMembership.OWNER, BusinessMembership.SUPERVISOR]
     ).values_list("business_id", flat=True)
 
     if branch_name:

@@ -13,7 +13,8 @@ function initScheduleChat({ messagesId, inputId, sendBtnId, apiUrl, counterId = 
     function updateCounter(newUsed) {
         used = newUsed;
         if (!counter) return;
-        counter.textContent = used + '/' + chatLimit + ' today';
+        const remaining = Math.max(0, chatLimit - used);
+        counter.textContent = remaining + ' left today';
         const ratio = used / chatLimit;
         counter.style.color = ratio >= 1
             ? 'oklch(45% 0.18 25)'
@@ -111,7 +112,7 @@ function initScheduleChat({ messagesId, inputId, sendBtnId, apiUrl, counterId = 
         if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
     });
 
-    // Disable immediately if limit already hit on page load
+    updateCounter(used);
     if (used >= chatLimit) disableInput();
 
     return { clearChat };

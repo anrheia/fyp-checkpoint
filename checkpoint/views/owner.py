@@ -14,6 +14,7 @@ User = get_user_model()
 
 @login_required
 def invite_staff(request, business_id):
+    # Creates a new user with a temporary password and emails them their login details; owner-only
     membership, business, error_response = get_supervisor_membership(request, business_id)
     if error_response:
         return error_response
@@ -58,6 +59,7 @@ def invite_staff(request, business_id):
 
 @login_required
 def delete_branch(request, business_id):
+    # Deletes the branch and any staff accounts that belong exclusively to it
     is_owner = BusinessMembership.objects.filter(
         user=request.user,
         business_id=business_id,
@@ -83,6 +85,7 @@ def delete_branch(request, business_id):
 
 @login_required
 def create_branch(request):
+    # Creates a new branch and assigns the current user as its owner
     is_owner = BusinessMembership.objects.filter(
         user=request.user,
         role=BusinessMembership.OWNER
@@ -109,6 +112,7 @@ def view_staff(request, business_id):
 
 @login_required
 def assign_roles(request, business_id):
+    # Updates the position field on each staff member's profile from the submitted form
     _, business, error = get_supervisor_membership(request, business_id)
     if error:
         return error
@@ -129,6 +133,7 @@ def assign_roles(request, business_id):
 
 @login_required
 def staff_detail(request, business_id, membership_id):
+    # View/edit a staff member's profile; supervisors can only see their own profile and employees
     manager_membership, business, error_response = get_supervisor_membership(request, business_id)
     if error_response:
         return error_response
@@ -171,6 +176,7 @@ def staff_detail(request, business_id, membership_id):
 @login_required
 @require_POST
 def assign_existing_staff(request, business_id):
+    # Adds a staff member who already exists in another owned branch to this branch
     is_owner = BusinessMembership.objects.filter(
         user=request.user,
         business_id=business_id,
@@ -217,6 +223,7 @@ def assign_existing_staff(request, business_id):
 @login_required
 @require_POST
 def remove_staff(request, business_id, membership_id):
+    # Removes the staff member from this branch; deletes their account if it's their only branch
     is_owner = BusinessMembership.objects.filter(
         user=request.user,
         business_id=business_id,

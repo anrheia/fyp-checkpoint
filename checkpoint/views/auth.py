@@ -17,6 +17,7 @@ def home(request):
 
 @transaction.atomic
 def owner_signup(request):
+    # Creates user, business, and OWNER membership atomically, then logs in
     if request.method == 'POST':
         form = OwnerSignUpForm(request.POST)
         if form.is_valid():
@@ -35,6 +36,7 @@ def owner_signup(request):
 
 
 class FirstLoginPasswordChangeView(PasswordChangeView):
+    # Shown to staff on first login; clears must_change_password once done
     template_name = 'dashboard/first_login_password_change.html'
     form_class = StyledPasswordChangeForm
     success_url = reverse_lazy('dashboard')

@@ -12,6 +12,7 @@ from ..utils import get_supervisor_membership
 
 
 def _build_staff_report_data(business, staff_memberships, from_dt, to_dt):
+    # Builds per-staff attendance rows for the date range; marks a clock-in as late if >15 min after shift start
     LATE_THRESHOLD = timedelta(minutes=15)
     tz = timezone.get_current_timezone()
     staff_data = []
@@ -82,6 +83,7 @@ def _build_staff_report_data(business, staff_memberships, from_dt, to_dt):
 
 @login_required
 def download_supervisor_report(request, business_id):
+    # Generates and streams a PDF attendance report for a single branch over the requested date range
     _, business, error = get_supervisor_membership(request, business_id)
     if error:
         return error
@@ -137,6 +139,7 @@ def download_supervisor_report(request, business_id):
 
 @login_required
 def download_owner_report(request):
+    # Same as the supervisor report but covers all branches the owner manages, with an overall summary
     owner_memberships = BusinessMembership.objects.filter(
         user=request.user,
         role=BusinessMembership.OWNER
