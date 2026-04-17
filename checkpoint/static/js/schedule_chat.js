@@ -1,11 +1,33 @@
-function initScheduleChat({ messagesId, inputId, sendBtnId, apiUrl }) {
+function initScheduleChat({ messagesId, inputId, sendBtnId, apiUrl, counterId = null, chatUsed = 0, chatLimit = 30 }) {
     const msgs = document.getElementById(messagesId);
     const input = document.getElementById(inputId);
     const sendBtn = document.getElementById(sendBtnId);
+    const counter = counterId ? document.getElementById(counterId) : null;
     const typingId = messagesId + '-typing';
+    let used = chatUsed;
 
     function getCsrf() {
         return document.cookie.split('; ').find(r => r.startsWith('csrftoken='))?.split('=')[1] || '';
+    }
+
+    function updateCounter(newUsed) {
+        used = newUsed;
+        if (!counter) return;
+        counter.textContent = used + '/' + chatLimit + ' today';
+        const ratio = used / chatLimit;
+        counter.style.color = ratio >= 1
+            ? 'oklch(45% 0.18 25)'
+            : ratio >= 0.8
+                ? 'oklch(50% 0.12 70)'
+                : 'oklch(55% 0.04 195)';
+    }
+
+    function disableInput() {
+        input.disabled = true;
+        input.placeholder = 'Daily limit reached. Check back tomorrow.';
+        sendBtn.disabled = true;
+        sendBtn.style.opacity = '0.4';
+        sendBtn.style.cursor = 'not-allowed';
     }
 
     function appendMessage(role, text) {
@@ -65,25 +87,32 @@ function initScheduleChat({ messagesId, inputId, sendBtnId, apiUrl }) {
             const data = await res.json();
             document.getElementById(typingId)?.remove();
             appendMessage('bot', data.answer || 'Something went wrong.');
+            if (!data.limit_reached) updateCounter(used + 1);
         } catch {
             document.getElementById(typingId)?.remove();
             appendMessage('bot', 'Error contacting server.');
         } finally {
             input.disabled = false;
             sendBtn.disabled = false;
+            sendBtn.style.opacity = '';
+            sendBtn.style.cursor = '';
             input.focus();
+            if (used >= chatLimit) disableInput();
         }
     }
 
     function clearChat() {
         msgs.innerHTML = '';
-        appendMessage('bot', "Chat cleared. Ask me who's working, when, and where.");
+        appendMessage('bot', "Chat cleared. Prompts to try:\n- Who's working Friday?\n- How many hours does John have this week?\n- Who's late right now?\n- Who's not scheduled next week?\n- Do any shifts overlap on Saturday?");
     }
 
     sendBtn.addEventListener('click', sendMessage);
     input.addEventListener('keydown', e => {
         if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
     });
+
+    // Disable immediately if limit already hit on page load
+    if (used >= chatLimit) disableInput();
 
     return { clearChat };
 }

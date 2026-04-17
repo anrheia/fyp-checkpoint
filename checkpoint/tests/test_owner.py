@@ -2,6 +2,7 @@ from datetime import datetime, timedelta
 from unittest.mock import patch
 
 from django.test import TestCase, override_settings
+from django.urls import reverse
 from django.utils import timezone
 
 from ..utils import compute_staff_status
@@ -28,6 +29,8 @@ class ComputeStaffStatusTests(TestCase):
         self.emp_out_active_within_grace = User.objects.create_user(username="emp_out_grace", password="x")
         self.emp_out_next_shift = User.objects.create_user(username="emp_out_next", password="x")
         self.emp_out_no_shifts = User.objects.create_user(username="emp_out_none", password="x")
+        self.emp_done = User.objects.create_user(username="emp_done", password="x")
+        self.emp_sup = User.objects.create_user(username="emp_sup", password="x")
 
         for u in [
             self.emp_in,
@@ -35,12 +38,19 @@ class ComputeStaffStatusTests(TestCase):
             self.emp_out_active_within_grace,
             self.emp_out_next_shift,
             self.emp_out_no_shifts,
+            self.emp_done,
         ]:
             BusinessMembership.objects.create(
                 business=self.business,
                 user=u,
                 role=BusinessMembership.EMPLOYEE
             )
+
+        BusinessMembership.objects.create(
+            business=self.business,
+            user=self.emp_sup,
+            role=BusinessMembership.SUPERVISOR
+        )
 
     def aware(self, y, m, d, hh, mm, ss=0):
         tz = timezone.get_current_timezone()
@@ -150,3 +160,80 @@ class ComputeStaffStatusTests(TestCase):
             [x["user"].username for x in status["out_staff"]]
         )
         self.assertNotIn("owner", all_usernames)
+
+    def test_shift_ended_without_clocking_in_goes_to_done_staff(self):
+        now = self.aware(2026, 3, 4, 14, 0)
+
+        WorkShift.objects.create(
+            business=self.business,
+            user=self.emp_done,
+            start=now - timedelta(hours=5),   # 09:00
+            end=now - timedelta(hours=1),     # 13:00 — already finished
+        )
+
+        status = self._run_at(now)
+
+        done_usernames = [x["user"].username for x in status["done_staff"]]
+        self.assertIn("emp_done", done_usernames)
+
+        out_usernames = [x["user"].username for x in status["out_staff"]]
+        late_usernames = [x["user"].username for x in status["late_staff"]]
+        self.assertNotIn("emp_done", out_usernames)
+        self.assertNotIn("emp_done", late_usernames)
+
+class OwnerCreateBranchTest(TestCase):
+    def setUp(self):
+        self.owner = User.objects.create_user(username='owner', password='pass')
+        self.business = Business.objects.create(name='Existing Branch')
+        BusinessMembership.objects.create(user=self.owner, business=self.business,
+                                          role=BusinessMembership.OWNER)
+        self.non_owner = User.objects.create_user(username='employee', password='pass')
+        BusinessMembership.objects.create(user=self.non_owner, business=self.business,
+                                          role=BusinessMembership.EMPLOYEE)
+
+    def test_owner_can_create_branch(self):
+        self.client.login(username='owner', password='pass')
+        self.client.post(reverse('create_branch'), {'name': 'New Branch'})
+        self.assertTrue(Business.objects.filter(name='New Branch').exists())
+
+    def test_owner_membership_created_for_new_branch(self):
+        self.client.login(username='owner', password='pass')
+        self.client.post(reverse('create_branch'), {'name': 'Second Branch'})
+        branch = Business.objects.get(name='Second Branch')
+        self.assertTrue(BusinessMembership.objects.filter(
+            user=self.owner, business=branch, role=BusinessMembership.OWNER
+        ).exists())
+
+    def test_non_owner_cannot_create_branch(self):
+        self.client.login(username='employee', password='pass')
+        resp = self.client.post(reverse('create_branch'), {'name': 'Blocked Branch'})
+        self.assertEqual(resp.status_code, 403)
+        self.assertFalse(Business.objects.filter(name='Blocked Branch').exists())
+
+
+class OwnerDeleteBranchTest(TestCase):
+    def setUp(self):
+        self.owner = User.objects.create_user(username='owner', password='pass')
+        self.business = Business.objects.create(name='Branch To Delete')
+        BusinessMembership.objects.create(user=self.owner, business=self.business,
+                                          role=BusinessMembership.OWNER)
+        self.non_owner = User.objects.create_user(username='employee', password='pass')
+        BusinessMembership.objects.create(user=self.non_owner, business=self.business,
+                                          role=BusinessMembership.EMPLOYEE)
+
+    def test_owner_can_delete_branch(self):
+        self.client.login(username='owner', password='pass')
+        self.client.post(reverse('delete_branch', args=[self.business.id]))
+        self.assertFalse(Business.objects.filter(id=self.business.id).exists())
+
+    def test_deleting_branch_removes_exclusive_staff(self):
+        self.client.login(username='owner', password='pass')
+        self.client.post(reverse('delete_branch', args=[self.business.id]))
+        self.assertFalse(User.objects.filter(username='employee').exists())
+
+    def test_non_owner_cannot_delete_branch(self):
+        self.client.login(username='employee', password='pass')
+        resp = self.client.post(reverse('delete_branch', args=[self.business.id]))
+        self.assertEqual(resp.status_code, 403)
+        self.assertTrue(Business.objects.filter(id=self.business.id).exists())
+

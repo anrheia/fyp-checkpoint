@@ -19,6 +19,8 @@ def invite_staff(request, business_id):
         return error_response
 
     is_owner = membership.role == BusinessMembership.OWNER
+    if not is_owner:
+        return HttpResponse("Access denied.", status=403)
     if request.method == 'POST':
         form = InviteStaffForm(request.POST)
 

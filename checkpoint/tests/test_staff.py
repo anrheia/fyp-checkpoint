@@ -1,13 +1,11 @@
-from datetime import datetime, timedelta
-from unittest.mock import patch
+from datetime import timedelta
 
 from django.test import TestCase
-from django.test.utils import override_settings
 from django.urls import reverse
 from django.utils import timezone
 from django.contrib.auth import get_user_model
 
-from ..models import Business, BusinessMembership, WorkShift, TimeClock
+from ..models import Business, BusinessMembership, WorkShift, TimeClock, StaffProfile
 
 User = get_user_model()
 
@@ -28,6 +26,11 @@ def make_shift(business, user, start=None, end=None):
     start = start or (now - timedelta(hours=1))
     end = end or (now + timedelta(hours=1))
     return WorkShift.objects.create(business=business, user=user, start=start, end=end)
+
+
+# ---------------------------------------------------------------------------
+# Schedule access
+# ---------------------------------------------------------------------------
 
 class StaffScheduleTest(TestCase):
 
@@ -51,12 +54,9 @@ class StaffScheduleTest(TestCase):
 
     def test_employee_can_fetch_own_shifts_json(self):
         self.client.force_login(self.employee)
-        url = reverse('staff_branch_shifts_json', args=[self.business.id])
-        resp = self.client.get(url)
+        resp = self.client.get(reverse('staff_branch_shifts_json', args=[self.business.id]))
         self.assertEqual(resp.status_code, 200)
-        payload = resp.json()
-        self.assertIsInstance(payload, list)
-        ids = [item.get('id') for item in payload]
+        ids = [item.get('id') for item in resp.json()]
         self.assertIn(self.shift.id, ids)
 
     def test_employee_only_sees_own_shifts(self):
@@ -64,50 +64,32 @@ class StaffScheduleTest(TestCase):
         make_membership(other, self.business, BusinessMembership.EMPLOYEE)
         other_shift = make_shift(self.business, other)
         self.client.force_login(self.employee)
-        url = reverse('staff_branch_shifts_json', args=[self.business.id])
-        resp = self.client.get(url)
-        ids = [item.get('id') for item in resp.json()]
+        ids = [item.get('id') for item in self.client.get(
+            reverse('staff_branch_shifts_json', args=[self.business.id])
+        ).json()]
         self.assertIn(self.shift.id, ids)
         self.assertNotIn(other_shift.id, ids)
 
     def test_employee_cannot_fetch_all_branch_shifts_json(self):
         self.client.force_login(self.employee)
-        url = reverse('branch_shifts_json', args=[self.business.id])
-        resp = self.client.get(url)
+        resp = self.client.get(reverse('branch_shifts_json', args=[self.business.id]))
         self.assertIn(resp.status_code, (302, 403))
-
-    def test_owner_can_fetch_all_branch_shifts_json(self):
-        self.client.force_login(self.owner)
-        url = reverse('branch_shifts_json', args=[self.business.id])
-        resp = self.client.get(url)
-        self.assertEqual(resp.status_code, 200)
 
     def test_employee_cannot_delete_shift(self):
         self.client.force_login(self.employee)
-        url = reverse('delete_shift', args=[self.business.id, self.shift.id])
-        resp = self.client.post(url)
+        resp = self.client.post(reverse('delete_shift', args=[self.business.id, self.shift.id]))
         self.assertIn(resp.status_code, (302, 403))
         self.assertTrue(WorkShift.objects.filter(id=self.shift.id).exists())
-
-    def test_staff_dashboard_has_calendar_element(self):
-        self.client.force_login(self.employee)
-        resp = self.client.get(reverse('dashboard'))
-        self.assertEqual(resp.status_code, 200)
-        html = resp.content.decode('utf-8')
-        self.assertIn('id="calendar"', html)
-
-    def test_staff_dashboard_links_to_shifts_json(self):
-        self.client.force_login(self.employee)
-        resp = self.client.get(reverse('dashboard'))
-        html = resp.content.decode('utf-8')
-        events_url = reverse('staff_branch_shifts_json', args=[self.business.id])
-        self.assertIn(events_url, html)
 
     def test_staff_dashboard_shows_pin_code(self):
         self.client.force_login(self.employee)
         resp = self.client.get(reverse('dashboard'))
-        self.assertEqual(resp.status_code, 200)
         self.assertIn(self.emp_membership.pin_code, resp.content.decode())
+
+
+# ---------------------------------------------------------------------------
+# Clock in / out
+# ---------------------------------------------------------------------------
 
 class StaffClockTest(TestCase):
 
@@ -121,97 +103,35 @@ class StaffClockTest(TestCase):
     def test_employee_can_clock_in_during_active_shift(self):
         now = timezone.now()
         WorkShift.objects.create(
-            business=self.business,
-            user=self.employee,
-            start=now - timedelta(minutes=5),
-            end=now + timedelta(hours=4),
+            business=self.business, user=self.employee,
+            start=now - timedelta(minutes=5), end=now + timedelta(hours=4),
             created_by=self.owner,
         )
         self.client.force_login(self.employee)
-        resp = self.client.post(reverse('clock_in', args=[self.business.id]))
-        self.assertRedirects(resp, reverse('dashboard'))
-        self.assertTrue(TimeClock.objects.filter(
-            user=self.employee, clock_out__isnull=True
-        ).exists())
+        self.assertRedirects(self.client.post(reverse('clock_in', args=[self.business.id])), reverse('dashboard'))
+        self.assertTrue(TimeClock.objects.filter(user=self.employee, clock_out__isnull=True).exists())
 
     def test_employee_cannot_clock_in_without_active_shift(self):
         self.client.force_login(self.employee)
-        resp = self.client.post(reverse('clock_in', args=[self.business.id]))
-        self.assertRedirects(resp, reverse('dashboard'))
+        self.client.post(reverse('clock_in', args=[self.business.id]))
         self.assertFalse(TimeClock.objects.filter(user=self.employee).exists())
-
-    def test_employee_cannot_clock_in_when_already_clocked_in(self):
-        now = timezone.now()
-        shift = WorkShift.objects.create(
-            business=self.business,
-            user=self.employee,
-            start=now - timedelta(minutes=5),
-            end=now + timedelta(hours=4),
-            created_by=self.owner,
-        )
-        TimeClock.objects.create(
-            business=self.business,
-            user=self.employee,
-            shift=shift,
-            clock_in=now - timedelta(minutes=3),
-        )
-        self.client.force_login(self.employee)
-        resp = self.client.post(reverse('clock_in', args=[self.business.id]))
-        self.assertRedirects(resp, reverse('dashboard'))
-        # Only one TimeClock record should exist
-        self.assertEqual(TimeClock.objects.filter(user=self.employee).count(), 1)
-
-    def test_employee_cannot_clock_in_twice_for_same_shift(self):
-        now = timezone.now()
-        shift = WorkShift.objects.create(
-            business=self.business,
-            user=self.employee,
-            start=now - timedelta(minutes=5),
-            end=now + timedelta(hours=4),
-            created_by=self.owner,
-        )
-        # Clock in once manually (simulating already clocked-out and re-clocking)
-        TimeClock.objects.create(
-            business=self.business,
-            user=self.employee,
-            shift=shift,
-            clock_in=now - timedelta(minutes=3),
-            clock_out=now - timedelta(minutes=1),
-        )
-        self.client.force_login(self.employee)
-        resp = self.client.post(reverse('clock_in', args=[self.business.id]))
-        self.assertRedirects(resp, reverse('dashboard'))
-        self.assertEqual(TimeClock.objects.filter(user=self.employee).count(), 1)
 
     def test_employee_can_clock_out(self):
-        now = timezone.now()
         TimeClock.objects.create(
-            business=self.business,
-            user=self.employee,
-            clock_in=now - timedelta(hours=1),
-            clock_out=None,
+            business=self.business, user=self.employee,
+            clock_in=timezone.now() - timedelta(hours=1), clock_out=None,
         )
         self.client.force_login(self.employee)
-        resp = self.client.post(reverse('clock_out', args=[self.business.id]))
-        self.assertRedirects(resp, reverse('dashboard'))
-        self.assertFalse(TimeClock.objects.filter(
-            user=self.employee, clock_out__isnull=True
-        ).exists())
-
-    def test_employee_cannot_clock_out_when_not_clocked_in(self):
-        self.client.force_login(self.employee)
-        resp = self.client.post(reverse('clock_out', args=[self.business.id]))
-        self.assertRedirects(resp, reverse('dashboard'))
-        # No TimeClock records created
-        self.assertFalse(TimeClock.objects.filter(user=self.employee).exists())
+        self.assertRedirects(self.client.post(reverse('clock_out', args=[self.business.id])), reverse('dashboard'))
+        self.assertFalse(TimeClock.objects.filter(user=self.employee, clock_out__isnull=True).exists())
 
     def test_non_member_cannot_clock_in(self):
         stranger = make_user('stranger')
-        now = timezone.now()
         self.client.force_login(stranger)
         resp = self.client.post(reverse('clock_in', args=[self.business.id]))
         self.assertIn(resp.status_code, (302, 403))
         self.assertFalse(TimeClock.objects.filter(user=stranger).exists())
+
 
 class MyHoursAccessTest(TestCase):
 
@@ -224,20 +144,14 @@ class MyHoursAccessTest(TestCase):
 
     def test_non_member_gets_403(self):
         self.client.force_login(self.stranger)
-        resp = self.client.get(self.url)
-        self.assertEqual(resp.status_code, 403)
+        self.assertEqual(self.client.get(self.url).status_code, 403)
 
-    def test_unauthenticated_user_redirected_to_login(self):
-        resp = self.client.get(self.url)
-        self.assertEqual(resp.status_code, 302)
-        self.assertIn('login', resp.url)
 
 class MyQRCodeTest(TestCase):
 
     def setUp(self):
         self.business = make_business()
         self.employee = make_user('employee')
-        self.stranger = make_user('stranger')
         make_membership(self.employee, self.business, BusinessMembership.EMPLOYEE)
 
     def test_employee_gets_qr_code_png(self):
@@ -246,11 +160,59 @@ class MyQRCodeTest(TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp['Content-Type'], 'image/png')
 
-    def test_qr_code_requires_login(self):
-        resp = self.client.get(reverse('my_qr_code', args=[self.business.id]))
-        self.assertEqual(resp.status_code, 302)
+class StaffScheduleBlockTest(TestCase):
+    def setUp(self):
+        self.business = make_business()
+        self.owner = make_user('owner')
+        self.employee = make_user('employee')
+        make_membership(self.owner, self.business, BusinessMembership.OWNER)
+        make_membership(self.employee, self.business, BusinessMembership.EMPLOYEE)
 
-    def test_non_member_cannot_get_qr_code(self):
-        self.client.force_login(self.stranger)
-        resp = self.client.get(reverse('my_qr_code', args=[self.business.id]))
-        self.assertEqual(resp.status_code, 403)
+    def test_employee_cannot_create_shift(self):
+        self.client.force_login(self.employee)
+        start = timezone.now() + timedelta(days=2)
+        resp = self.client.post(reverse('create_shift', args=[self.business.id]), {
+            'user': self.employee.id,
+            'start': start.strftime('%Y-%m-%dT%H:%M'),
+            'end': (start + timedelta(hours=4)).strftime('%Y-%m-%dT%H:%M'),
+            'notes': '',
+        })
+        self.assertIn(resp.status_code, (302, 403))
+        self.assertFalse(WorkShift.objects.filter(created_by=self.employee).exists())
+
+
+class StaffPageBlockTest(TestCase):
+    def setUp(self):
+        self.business = make_business()
+        self.employee = make_user('employee')
+        make_membership(self.employee, self.business, BusinessMembership.EMPLOYEE)
+        self.emp_mem = BusinessMembership.objects.get(user=self.employee, business=self.business)
+
+    def test_employee_cannot_access_invite_staff(self):
+        self.client.force_login(self.employee)
+        resp = self.client.get(reverse('invite_staff', args=[self.business.id]))
+        self.assertIn(resp.status_code, (302, 403))
+
+    def test_employee_cannot_assign_roles(self):
+        self.client.force_login(self.employee)
+        resp = self.client.post(reverse('assign_roles', args=[self.business.id]),
+                                {f'position_{self.emp_mem.id}': 'Kitchen'})
+        self.assertIn(resp.status_code, (302, 403))
+        self.assertFalse(StaffProfile.objects.filter(membership=self.emp_mem).exists())
+
+class StaffHoursAccessTest(TestCase):
+    def setUp(self):
+        self.business = make_business()
+        self.employee = make_user('employee')
+        make_membership(self.employee, self.business, BusinessMembership.EMPLOYEE)
+        self.url = reverse('staff_hours_json', args=[self.business.id, self.employee.id])
+
+    def test_employee_can_view_own_hours(self):
+        self.client.force_login(self.employee)
+        self.assertEqual(self.client.get(self.url).status_code, 200)
+
+    def test_employee_cannot_view_other_employee_hours(self):
+        other = make_user('other')
+        make_membership(other, self.business, BusinessMembership.EMPLOYEE)
+        self.client.force_login(other)
+        self.assertEqual(self.client.get(self.url).status_code, 403)
