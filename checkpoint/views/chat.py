@@ -27,7 +27,6 @@ DAILY_CHAT_LIMIT = 30
 
 
 def _chat_usage_today(request):
-    """Return (count_used, session_key) for today."""
     key = f'chat_{timezone.localdate().isoformat()}'
     return request.session.get(key, 0), key
 

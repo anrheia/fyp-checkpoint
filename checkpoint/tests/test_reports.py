@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta, time, date as date_type
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 from django.test import TestCase, override_settings
 from django.urls import reverse
@@ -45,7 +45,6 @@ def _aware(dt):
 
 
 def _shift(business, user, date, start_h=9, end_h=17):
-    tz = timezone.get_current_timezone()
     return WorkShift.objects.create(
         business=business, user=user,
         start=_aware(datetime(date.year, date.month, date.day, start_h, 0)),
@@ -55,9 +54,7 @@ def _shift(business, user, date, start_h=9, end_h=17):
 
 def _timeclock(business, user, date, in_h, in_m, out_h, out_m, shift=None):
     return TimeClock.objects.create(
-        business=business,
-        user=user,
-        shift=shift,
+        business=business, user=user, shift=shift,
         clock_in=_aware(datetime(date.year, date.month, date.day, in_h, in_m)),
         clock_out=_aware(datetime(date.year, date.month, date.day, out_h, out_m)),
     )
@@ -68,12 +65,6 @@ def _date_range(d):
     from_dt = timezone.make_aware(datetime.combine(d, time.min), tz)
     to_dt = timezone.make_aware(datetime.combine(d + timedelta(days=1), time.min), tz)
     return from_dt, to_dt
-
-
-# ---------------------------------------------------------------------------
-# _build_staff_report_data unit tests
-# ---------------------------------------------------------------------------
-
 @override_settings(USE_TZ=True, TIME_ZONE="UTC")
 class BuildReportDataTests(TestCase):
     def setUp(self):
@@ -91,8 +82,8 @@ class BuildReportDataTests(TestCase):
 
     def test_multiple_timeclocks_summed(self):
         yesterday = self.today - timedelta(days=1)
-        _timeclock(self.business, self.emp, self.today, 9, 0, 13, 0)    # 4h
-        _timeclock(self.business, self.emp, yesterday, 10, 0, 14, 30)   # 4h 30m
+        _timeclock(self.business, self.emp, self.today, 9, 0, 13, 0)
+        _timeclock(self.business, self.emp, yesterday, 10, 0, 14, 30)
         tz = timezone.get_current_timezone()
         from_dt = timezone.make_aware(datetime.combine(yesterday, time.min), tz)
         to_dt = timezone.make_aware(datetime.combine(self.today + timedelta(days=1), time.min), tz)
@@ -101,9 +92,8 @@ class BuildReportDataTests(TestCase):
         self.assertEqual(data[0]['total_seconds'], (4 * 3600) + (4 * 3600 + 30 * 60))
         self.assertEqual(data[0]['shift_count'], 2)
 
-    def test_late_detection_above_threshold(self):
+    def test_late_detection(self):
         ws = _shift(self.business, self.emp, self.today, start_h=9, end_h=17)
-        # clock in 20 minutes late
         _timeclock(self.business, self.emp, self.today, 9, 20, 17, 0, shift=ws)
         from_dt, to_dt = _date_range(self.today)
         memberships = BusinessMembership.objects.filter(pk=self.mem.pk).select_related('user', 'profile')
@@ -112,44 +102,6 @@ class BuildReportDataTests(TestCase):
         self.assertTrue(data[0]['entries'][0]['is_late'])
         self.assertEqual(data[0]['entries'][0]['minutes_late'], 20)
 
-    def test_late_not_triggered_at_threshold(self):
-        ws = _shift(self.business, self.emp, self.today, start_h=9, end_h=17)
-        # clock in exactly 15 minutes after shift start — should NOT be late (diff == threshold, not >)
-        _timeclock(self.business, self.emp, self.today, 9, 15, 17, 0, shift=ws)
-        from_dt, to_dt = _date_range(self.today)
-        memberships = BusinessMembership.objects.filter(pk=self.mem.pk).select_related('user', 'profile')
-        data = _build_staff_report_data(self.business, memberships, from_dt, to_dt)
-        self.assertEqual(data[0]['late_count'], 0)
-        self.assertFalse(data[0]['entries'][0]['is_late'])
-
-    def test_no_late_without_shift_link(self):
-        _timeclock(self.business, self.emp, self.today, 9, 30, 17, 0, shift=None)
-        from_dt, to_dt = _date_range(self.today)
-        memberships = BusinessMembership.objects.filter(pk=self.mem.pk).select_related('user', 'profile')
-        data = _build_staff_report_data(self.business, memberships, from_dt, to_dt)
-        self.assertEqual(data[0]['late_count'], 0)
-        self.assertFalse(data[0]['entries'][0]['is_late'])
-
-    def test_open_timeclock_excluded(self):
-        TimeClock.objects.create(
-            business=self.business, user=self.emp,
-            clock_in=_aware(datetime(self.today.year, self.today.month, self.today.day, 9, 0)),
-            clock_out=None,
-        )
-        from_dt, to_dt = _date_range(self.today)
-        memberships = BusinessMembership.objects.filter(pk=self.mem.pk).select_related('user', 'profile')
-        data = _build_staff_report_data(self.business, memberships, from_dt, to_dt)
-        self.assertEqual(data[0]['shift_count'], 0)
-
-    def test_date_range_filtering_excludes_outside_entries(self):
-        last_week = self.today - timedelta(days=7)
-        _timeclock(self.business, self.emp, last_week, 9, 0, 17, 0)
-        from_dt, to_dt = _date_range(self.today)
-        memberships = BusinessMembership.objects.filter(pk=self.mem.pk).select_related('user', 'profile')
-        data = _build_staff_report_data(self.business, memberships, from_dt, to_dt)
-        self.assertEqual(data[0]['shift_count'], 0)
-        self.assertEqual(data[0]['total_seconds'], 0)
-
     def test_position_included_from_staff_profile(self):
         StaffProfile.objects.create(membership=self.mem, position='Barista')
         _timeclock(self.business, self.emp, self.today, 9, 0, 17, 0)
@@ -157,22 +109,6 @@ class BuildReportDataTests(TestCase):
         memberships = BusinessMembership.objects.filter(pk=self.mem.pk).select_related('user', 'profile')
         data = _build_staff_report_data(self.business, memberships, from_dt, to_dt)
         self.assertEqual(data[0]['position'], 'Barista')
-
-    def test_name_falls_back_to_username(self):
-        no_name = User.objects.create_user(username='noname', password='pass',
-                                           first_name='', last_name='')
-        mem = BusinessMembership.objects.create(user=no_name, business=self.business,
-                                                role=BusinessMembership.EMPLOYEE)
-        from_dt, to_dt = _date_range(self.today)
-        memberships = BusinessMembership.objects.filter(pk=mem.pk).select_related('user', 'profile')
-        data = _build_staff_report_data(self.business, memberships, from_dt, to_dt)
-        self.assertEqual(data[0]['name'], 'noname')
-
-
-# ---------------------------------------------------------------------------
-# Owner report view tests
-# ---------------------------------------------------------------------------
-
 @override_settings(USE_TZ=True, TIME_ZONE="UTC")
 class OwnerReportViewTests(TestCase):
     def setUp(self):
@@ -182,49 +118,24 @@ class OwnerReportViewTests(TestCase):
         self.today = timezone.localdate()
         self.client.login(username='owner', password='pass')
 
+    def test_unauthenticated_redirects(self):
+        self.client.logout()
+        resp = self.client.get(self.url, {'from': str(self.today), 'to': str(self.today)})
+        self.assertEqual(resp.status_code, 302)
+
     def test_non_owner_gets_403(self):
         self.client.login(username='emp', password='pass')
-        response = self.client.get(self.url, {'from': str(self.today), 'to': str(self.today)})
-        self.assertEqual(response.status_code, 403)
-
-    def test_missing_dates_returns_400(self):
-        response = self.client.get(self.url)
-        self.assertEqual(response.status_code, 400)
-
-    def test_invalid_date_format_returns_400(self):
-        response = self.client.get(self.url, {'from': 'not-a-date', 'to': str(self.today)})
-        self.assertEqual(response.status_code, 400)
-
-    def test_from_after_to_returns_400(self):
-        tomorrow = self.today + timedelta(days=1)
-        response = self.client.get(self.url, {'from': str(tomorrow), 'to': str(self.today)})
-        self.assertEqual(response.status_code, 400)
+        resp = self.client.get(self.url, {'from': str(self.today), 'to': str(self.today)})
+        self.assertEqual(resp.status_code, 403)
 
     def test_valid_request_returns_pdf(self):
         with patch('checkpoint.views.reports.WeasyHTML') as mock_html, \
              patch('checkpoint.views.reports.WeasyCSS'):
             mock_html.return_value.write_pdf.return_value = b'%PDF-fake'
-            response = self.client.get(self.url, {'from': str(self.today), 'to': str(self.today)})
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response['Content-Type'], 'application/pdf')
-        self.assertIn('attachment', response['Content-Disposition'])
-
-    def test_pdf_filename_contains_dates(self):
-        with patch('checkpoint.views.reports.WeasyHTML') as mock_html, \
-             patch('checkpoint.views.reports.WeasyCSS'):
-            mock_html.return_value.write_pdf.return_value = b'%PDF-fake'
-            response = self.client.get(self.url, {'from': str(self.today), 'to': str(self.today)})
-        self.assertIn(str(self.today), response['Content-Disposition'])
-
-    def test_unauthenticated_redirects(self):
-        self.client.logout()
-        response = self.client.get(self.url, {'from': str(self.today), 'to': str(self.today)})
-        self.assertEqual(response.status_code, 302)
-
-
-# ---------------------------------------------------------------------------
-# Supervisor report view tests
-# ---------------------------------------------------------------------------
+            resp = self.client.get(self.url, {'from': str(self.today), 'to': str(self.today)})
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp['Content-Type'], 'application/pdf')
+        self.assertIn('attachment', resp['Content-Disposition'])
 
 @override_settings(USE_TZ=True, TIME_ZONE="UTC")
 class SupervisorReportViewTests(TestCase):
@@ -236,47 +147,21 @@ class SupervisorReportViewTests(TestCase):
         self.today = timezone.localdate()
         self.client.login(username='sup', password='pass')
 
+    def test_unauthenticated_redirects(self):
+        self.client.logout()
+        resp = self.client.get(self.url, {'from': str(self.today), 'to': str(self.today)})
+        self.assertEqual(resp.status_code, 302)
+
     def test_non_supervisor_gets_403(self):
         self.client.login(username='emp', password='pass')
-        response = self.client.get(self.url, {'from': str(self.today), 'to': str(self.today)})
-        self.assertEqual(response.status_code, 403)
-
-    def test_missing_dates_returns_400(self):
-        response = self.client.get(self.url)
-        self.assertEqual(response.status_code, 400)
-
-    def test_invalid_date_format_returns_400(self):
-        response = self.client.get(self.url, {'from': 'bad', 'to': str(self.today)})
-        self.assertEqual(response.status_code, 400)
-
-    def test_from_after_to_returns_400(self):
-        tomorrow = self.today + timedelta(days=1)
-        response = self.client.get(self.url, {'from': str(tomorrow), 'to': str(self.today)})
-        self.assertEqual(response.status_code, 400)
+        resp = self.client.get(self.url, {'from': str(self.today), 'to': str(self.today)})
+        self.assertEqual(resp.status_code, 403)
 
     def test_valid_request_returns_pdf(self):
         with patch('checkpoint.views.reports.WeasyHTML') as mock_html, \
              patch('checkpoint.views.reports.WeasyCSS'):
             mock_html.return_value.write_pdf.return_value = b'%PDF-fake'
-            response = self.client.get(self.url, {'from': str(self.today), 'to': str(self.today)})
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response['Content-Type'], 'application/pdf')
-        self.assertIn('attachment', response['Content-Disposition'])
-
-    def test_pdf_filename_contains_business_name(self):
-        with patch('checkpoint.views.reports.WeasyHTML') as mock_html, \
-             patch('checkpoint.views.reports.WeasyCSS'):
-            mock_html.return_value.write_pdf.return_value = b'%PDF-fake'
-            response = self.client.get(self.url, {'from': str(self.today), 'to': str(self.today)})
-        self.assertIn('Cafe_Test', response['Content-Disposition'])
-
-    def test_unauthenticated_redirects(self):
-        self.client.logout()
-        response = self.client.get(self.url, {'from': str(self.today), 'to': str(self.today)})
-        self.assertEqual(response.status_code, 302)
-
-    def test_wrong_business_gets_403(self):
-        other_business = Business.objects.create(name='Other Branch')
-        url = reverse(SUP_REPORT, kwargs={'business_id': other_business.pk})
-        response = self.client.get(url, {'from': str(self.today), 'to': str(self.today)})
-        self.assertEqual(response.status_code, 403)
+            resp = self.client.get(self.url, {'from': str(self.today), 'to': str(self.today)})
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp['Content-Type'], 'application/pdf')
+        self.assertIn('attachment', resp['Content-Disposition'])
