@@ -19,6 +19,7 @@ User = get_user_model()
 @login_required
 @require_POST
 def clock_in(request, business_id):
+    # Requires an active shift at the current time; prevents double clock-ins per shift
     _, business, error_response = get_membership(request, business_id)
     if error_response:
         return error_response
@@ -66,6 +67,7 @@ def clock_in(request, business_id):
 @login_required
 @require_POST
 def clock_out(request, business_id):
+    # Closes the most recent open TimeClock entry for this user
     membership, business, error_response = get_membership(request, business_id)
     if error_response:
         return error_response
@@ -90,6 +92,7 @@ def clock_out(request, business_id):
 
 
 def staff_branch_shifts_json(request, business_id):
+    # JSON endpoint used by the staff schedule calendar
     from ..utils import shift_to_dict
     _, business, error_response = get_membership(request, business_id, json=True)
 
@@ -108,6 +111,7 @@ def staff_branch_shifts_json(request, business_id):
 
 @login_required
 def my_hours(request, business_id):
+    # Renders the logged-in user's clocked and scheduled hours for the current week and month
     membership, business, error_response = get_membership(request, business_id, json=True)
     if error_response:
         return error_response
@@ -138,6 +142,7 @@ def my_hours(request, business_id):
     )
 
     def worked_total_for_range(start_dt, end_dt):
+        # Sums actual clocked durations that overlap the given range
         qs = TimeClock.objects.filter(
             business=business,
             user=request.user,
@@ -154,6 +159,7 @@ def my_hours(request, business_id):
         )["total"]
 
     def scheduled_total_for_range(start_dt, end_dt):
+        # Clips each shift to the range boundary before summing, so partial overlaps are counted correctly
         qs = (
             WorkShift.objects
             .filter(
@@ -212,6 +218,7 @@ def my_hours(request, business_id):
 
 @login_required
 def staff_hours_json(request, business_id, user_id):
+    # JSON endpoint for the hours modal; accessible to owners/supervisors or the staff member themselves
     is_supervisor = BusinessMembership.objects.filter(
         user=request.user,
         business_id=business_id,

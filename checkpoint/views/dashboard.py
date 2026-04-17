@@ -14,6 +14,7 @@ User = get_user_model()
 
 @login_required
 def dashboard(request):
+    # Routes to the correct dashboard template based on the user's role (owner -> supervisor -> staff)
     owner_memberships = BusinessMembership.objects.filter(
         user=request.user,
         role=BusinessMembership.OWNER
@@ -106,6 +107,7 @@ def dashboard(request):
 @login_required
 @require_POST
 def send_branch_message(request, business_id):
+    # Sends an email from a supervisor/owner to a single staff member at their respective branch
     _, business, error = get_membership(request, business_id)
     if error:
         return error
@@ -135,6 +137,7 @@ def send_branch_message(request, business_id):
 @login_required
 @require_POST
 def send_staff_message(request, business_id):
+    # Sends an email from a staff member to an owner or supervisor at their branch
     _, business, error = get_membership(request, business_id)
     if error:
         return error
