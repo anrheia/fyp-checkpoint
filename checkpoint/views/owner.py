@@ -237,9 +237,14 @@ def remove_staff(request, business_id, membership_id):
     target_user = target_membership.user
     display_name = target_user.get_full_name() or target_user.username
     branch_name = target_membership.business.name
+
+    is_exclusive = not BusinessMembership.objects.filter(
+        user=target_user
+    ).exclude(id=membership_id).exists()
+
     target_membership.delete()
 
-    if not BusinessMembership.objects.filter(user=target_user).exists():
+    if is_exclusive:
         target_user.delete()
 
     messages.success(request, f"{display_name} has been removed from {branch_name}.")
