@@ -12,6 +12,7 @@ from django.contrib.auth import get_user_model
 User = get_user_model()
 
 
+# TIME_ZONE pinned to UTC so aware() datetimes are deterministic regardless of the machine running the tests
 @override_settings(USE_TZ=True, TIME_ZONE="UTC")
 class ComputeStaffStatusTests(TestCase):
     def setUp(self):
@@ -24,6 +25,7 @@ class ComputeStaffStatusTests(TestCase):
             role=BusinessMembership.OWNER
         )
 
+        # One user per status bucket so each test can target a specific outcome
         self.emp_in = User.objects.create_user(username="emp_in", password="x")
         self.emp_late = User.objects.create_user(username="emp_late", password="x")
         self.emp_out_active_within_grace = User.objects.create_user(username="emp_out_grace", password="x")
@@ -52,15 +54,18 @@ class ComputeStaffStatusTests(TestCase):
             role=BusinessMembership.SUPERVISOR
         )
 
+    # Helper that builds a timezone-aware datetime without repeating the tz boilerplate
     def aware(self, y, m, d, hh, mm, ss=0):
         tz = timezone.get_current_timezone()
         return timezone.make_aware(datetime(y, m, d, hh, mm, ss), tz)
 
+    # Freezes Django's clock at fixed_now so compute_staff_status sees a predictable "now"
     def _run_at(self, fixed_now):
         with patch("django.utils.timezone.now", return_value=fixed_now):
             return compute_staff_status(self.business, minutes=15)
 
     def test_clocked_in_goes_to_in_staff(self):
+        # An open TimeClock (no clock_out) must land in in_staff, not late or out
         now = self.aware(2026, 3, 4, 10, 0)
 
         TimeClock.objects.create(
@@ -81,6 +86,7 @@ class ComputeStaffStatusTests(TestCase):
         self.assertNotIn("emp_in", out_usernames)
 
     def test_active_shift_past_grace_goes_to_late_staff(self):
+        # Shift started 20 min ago with no clock-in exceeds the 15-min grace → LATE
         now = self.aware(2026, 3, 4, 10, 0)
 
         WorkShift.objects.create(
@@ -101,6 +107,8 @@ class ComputeStaffStatusTests(TestCase):
         self.assertNotIn("emp_late", out_usernames)
 
     def test_active_shift_within_grace_goes_to_out_staff_with_shift(self):
+        # Shift started 10 min ago (within the 15-min grace) → OUT with the shift attached,
+        # not LATE, so the dashboard can show the expected start time
         now = self.aware(2026, 3, 4, 10, 0)
 
         shift = WorkShift.objects.create(
@@ -121,6 +129,8 @@ class ComputeStaffStatusTests(TestCase):
         self.assertNotIn("emp_out_grace", late_usernames)
 
     def test_out_staff_gets_next_shift_today_when_not_active(self):
+        # Employee has a future shift today but no current one → OUT with next_shift populated
+        # so the dashboard can show when they're due in
         now = self.aware(2026, 3, 4, 10, 0)
 
         next_shift = WorkShift.objects.create(
@@ -140,6 +150,7 @@ class ComputeStaffStatusTests(TestCase):
         self.assertEqual(out_items[0]["next_shift"].id, next_shift.id)
 
     def test_out_staff_no_shifts_today_has_no_shift_and_no_next_shift(self):
+        # No shifts at all today → employee goes to not_scheduled, not out_staff
         now = self.aware(2026, 3, 4, 10, 0)
 
         status = self._run_at(now)
@@ -151,6 +162,7 @@ class ComputeStaffStatusTests(TestCase):
         self.assertEqual(len(out_items), 0)
 
     def test_owner_is_not_included_in_results(self):
+        # Owners manage branches but are not tracked as schedulable staff
         now = self.aware(2026, 3, 4, 10, 0)
         status = self._run_at(now)
 
@@ -162,6 +174,7 @@ class ComputeStaffStatusTests(TestCase):
         self.assertNotIn("owner", all_usernames)
 
     def test_shift_ended_without_clocking_in_goes_to_done_staff(self):
+        # A shift whose end time has passed with no TimeClock → DONE, not late or out
         now = self.aware(2026, 3, 4, 14, 0)
 
         WorkShift.objects.create(
@@ -181,6 +194,9 @@ class ComputeStaffStatusTests(TestCase):
         self.assertNotIn("emp_done", out_usernames)
         self.assertNotIn("emp_done", late_usernames)
 
+
+# Tests for branch creation — also verifies that the owner membership is
+# auto-created for the new branch so they don't get locked out of it
 class OwnerCreateBranchTest(TestCase):
     def setUp(self):
         self.owner = User.objects.create_user(username='owner', password='pass')
@@ -197,6 +213,8 @@ class OwnerCreateBranchTest(TestCase):
         self.assertTrue(Business.objects.filter(name='New Branch').exists())
 
     def test_owner_membership_created_for_new_branch(self):
+        # The view must create an OWNER membership automatically; without it the owner
+        # would be unable to manage the branch they just created
         self.client.login(username='owner', password='pass')
         self.client.post(reverse('create_branch'), {'name': 'Second Branch'})
         branch = Business.objects.get(name='Second Branch')
@@ -205,12 +223,15 @@ class OwnerCreateBranchTest(TestCase):
         ).exists())
 
     def test_non_owner_cannot_create_branch(self):
+        # Employees must be blocked and no branch should be created as a side-effect
         self.client.login(username='employee', password='pass')
         resp = self.client.post(reverse('create_branch'), {'name': 'Blocked Branch'})
         self.assertEqual(resp.status_code, 403)
         self.assertFalse(Business.objects.filter(name='Blocked Branch').exists())
 
 
+# Tests for branch deletion — the critical behaviour here is that staff who belong
+# exclusively to the deleted branch also have their accounts removed
 class OwnerDeleteBranchTest(TestCase):
     def setUp(self):
         self.owner = User.objects.create_user(username='owner', password='pass')
@@ -227,11 +248,14 @@ class OwnerDeleteBranchTest(TestCase):
         self.assertFalse(Business.objects.filter(id=self.business.id).exists())
 
     def test_deleting_branch_removes_exclusive_staff(self):
+        # Staff whose only membership is in this branch are orphaned accounts — they must
+        # be deleted along with the branch to avoid leaving inaccessible user records
         self.client.login(username='owner', password='pass')
         self.client.post(reverse('delete_branch', args=[self.business.id]))
         self.assertFalse(User.objects.filter(username='employee').exists())
 
     def test_non_owner_cannot_delete_branch(self):
+        # Employees must be blocked and the branch must remain intact
         self.client.login(username='employee', password='pass')
         resp = self.client.post(reverse('delete_branch', args=[self.business.id]))
         self.assertEqual(resp.status_code, 403)

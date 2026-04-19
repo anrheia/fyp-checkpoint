@@ -11,6 +11,7 @@ urlpatterns = [
     path('logout/', LogoutView.as_view(), name='logout'),
 
     path('dashboard/', views.dashboard, name='dashboard'),
+    path('dashboard/switch-view/', views.switch_dashboard_view, name='switch_dashboard_view'),
     path('branch/create/', views.create_branch, name='create_branch'),
     path('branches/<int:business_id>/delete/', views.delete_branch, name='delete_branch'),
     path('branches/<int:business_id>/invite-staff/', views.invite_staff, name='invite_staff'),

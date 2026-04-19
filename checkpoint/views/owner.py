@@ -210,13 +210,18 @@ def assign_existing_staff(request, business_id):
         messages.error(request, f"{target_user.get_full_name() or target_user.username} is already in this branch.")
         return redirect('dashboard')
 
+    role_value = request.POST.get('role', BusinessMembership.EMPLOYEE)
+    if role_value not in (BusinessMembership.EMPLOYEE, BusinessMembership.SUPERVISOR):
+        role_value = BusinessMembership.EMPLOYEE
+
     new_membership = BusinessMembership.objects.create(
         user=target_user,
         business=business,
-        role=BusinessMembership.EMPLOYEE
+        role=role_value,
     )
     StaffProfile.objects.create(membership=new_membership)
-    messages.success(request, f"{target_user.get_full_name() or target_user.username} has been added to {business.name}.")
+    role_label = "supervisor" if role_value == BusinessMembership.SUPERVISOR else "employee"
+    messages.success(request, f"{target_user.get_full_name() or target_user.username} has been added to {business.name} as {role_label}.")
     return redirect('dashboard')
 
 

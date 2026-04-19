@@ -14,7 +14,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500&family=Fraunces:wght@700;900&display=swap" rel="stylesheet">
     
-    <title>Your Dashboard</title>
+    <title>Owner Dashboard</title>
 </head>
 <body data-theme="checkpoint">
     <div class="bg-mesh"></div>
@@ -103,6 +103,7 @@
                                 <li><em>"Who's late right now?"</em></li>
                                 <li><em>"Who's not scheduled next week?"</em></li>
                                 <li><em>"Do any shifts overlap on Saturday?"</em></li>
+                                <li><em>"Schedule John Smith in Luigi's for 9:00–17:00 on Friday"</em></li>
                             </ul>
                         </div>
                     </div>
@@ -117,10 +118,10 @@
             </div>
 
             {% if branches_with_status %}
-            <div class="grid sm:grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+            <div>
                 {% for item in branches_with_status %}
 
-                <div style="background: oklch(99% 0 0 / 0.65); backdrop-filter: blur(20px); border: 1px solid oklch(0% 0 0 / 0.07); box-shadow: 0 8px 32px oklch(0% 0 0 / 0.06); border-radius: 1rem; padding: 1.25rem;">
+                <div style="background: oklch(99% 0 0 / 0.65); backdrop-filter: blur(20px); border: 1px solid oklch(0% 0 0 / 0.07); box-shadow: 0 8px 32px oklch(0% 0 0 / 0.06); border-radius: 1rem; padding: 1.25rem; margin-bottom: 1.25rem;">
 
                     <!-- Card header -->
                     <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 0.25rem;">
@@ -163,7 +164,7 @@
                     </div>
 
                     <!-- Staff rows -->
-                    <div style="display: flex; flex-direction: column; gap: 0.25rem;">
+                    <div style="max-height: 22rem; overflow-y: auto; display: flex; flex-direction: column; gap: 0.25rem; padding-right: 0.25rem;">
 
                         {% for s in item.in_staff %}
                         <div style="display: grid; grid-template-columns: 80px 1fr 1fr; align-items: center; padding: 0.5rem; border-radius: 0.75rem; background: oklch(94% 0.05 168 / 0.4);">
@@ -255,6 +256,18 @@
                         </div>
                         {% endfor %}
 
+                        {% if not item.in_staff and not item.late_staff and not item.out_staff and not item.done_staff %}
+                        <div style="display: flex; align-items: center; justify-content: center; padding: 1rem; border-radius: 0.75rem; background: oklch(94% 0.03 85 / 0.4); font-size: 0.875rem; font-style: italic; color: oklch(60% 0.04 195);">
+                            No one is scheduled today.
+                        </div>
+                        {% endif %}
+
+                        {% if item.not_scheduled %}
+                        <div style="display: flex; align-items: center; gap: 0.75rem; margin: 0.5rem 0 0.25rem;">
+                            <div style="flex: 1; height: 1px; background: oklch(0% 0 0 / 0.06);"></div>
+                            <span style="font-size: 0.65rem; font-weight: 500; letter-spacing: 0.07em; text-transform: uppercase; color: oklch(65% 0.03 195); white-space: nowrap;">Off Today</span>
+                            <div style="flex: 1; height: 1px; background: oklch(0% 0 0 / 0.06);"></div>
+                        </div>
                         {% for s in item.not_scheduled %}
                         <div style="display: grid; grid-template-columns: 80px 1fr 1fr; align-items: center; padding: 0.5rem; border-radius: 0.75rem; background: oklch(94% 0.02 195 / 0.25);">
                             <span style="display: inline-flex; align-items: center; gap: 0.4rem;">
@@ -273,11 +286,6 @@
                             <span style="font-size: 0.875rem; color: oklch(65% 0.04 195);">Not scheduled today</span>
                         </div>
                         {% endfor %}
-
-                        {% if not item.in_staff and not item.late_staff and not item.out_staff and not item.done_staff and not item.not_scheduled %}
-                        <div style="display: flex; align-items: center; justify-content: center; padding: 1.5rem; border-radius: 0.75rem; background: oklch(94% 0.03 85 / 0.4); font-size: 0.875rem; font-style: italic; color: oklch(60% 0.04 195);">
-                            No staff scheduled today, or all scheduled staff have completed their shifts.
-                        </div>
                         {% endif %}
 
                     </div>
@@ -333,13 +341,17 @@
                         {% if item.assignable_staff %}
                         <div style="height: 1px; background: oklch(0% 0 0 / 0.07); margin: 1rem 0;"></div>
                         <p style="font-size: 0.65rem; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: oklch(55% 0.04 195); margin-bottom: 0.6rem;">Assign Existing Staff</p>
-                        <form method="post" action="{% url 'assign_existing_staff' item.branch.id %}" style="display: flex; gap: 0.5rem; align-items: center;">
+                        <form method="post" action="{% url 'assign_existing_staff' item.branch.id %}" style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
                             {% csrf_token %}
-                            <select name="user_id" style="flex: 1; background: white; border: 1.5px solid oklch(82% 0.03 195); border-radius: 0.6rem; padding: 0.35rem 0.6rem; font-family: 'DM Sans', sans-serif; font-size: 0.8rem; color: oklch(28% 0.04 195); outline: none; cursor: pointer;">
+                            <select name="user_id" style="flex: 1; min-width: 8rem; background: white; border: 1.5px solid oklch(82% 0.03 195); border-radius: 0.6rem; padding: 0.35rem 0.6rem; font-family: 'DM Sans', sans-serif; font-size: 0.8rem; color: oklch(28% 0.04 195); outline: none; cursor: pointer;">
                                 <option value="">— Select staff member —</option>
                                 {% for u in item.assignable_staff %}
                                 <option value="{{ u.id }}">{{ u.get_full_name|default:u.username }}</option>
                                 {% endfor %}
+                            </select>
+                            <select name="role" style="background: white; border: 1.5px solid oklch(82% 0.03 195); border-radius: 0.6rem; padding: 0.35rem 0.6rem; font-family: 'DM Sans', sans-serif; font-size: 0.8rem; color: oklch(28% 0.04 195); outline: none; cursor: pointer;">
+                                <option value="employee">Employee</option>
+                                <option value="supervisor">Supervisor</option>
                             </select>
                             <button type="submit" class="text-white bg-gradient-to-br from-green-400 to-emerald-500 hover:bg-gradient-to-bl focus:ring-4 focus:outline-none focus:ring-green-200 font-medium text-center leading-5" style="font-size: 0.8rem; padding: 0.35rem 0.85rem; border-radius: 9999px; border: none; cursor: pointer; white-space: nowrap;">Add</button>
                         </form>
@@ -625,6 +637,7 @@
                 });
         }
     </script>
+    <footer style="text-align: center; padding: 1.5rem 0 1rem; font-size: 0.7rem; color: oklch(65% 0.03 195); font-family: 'DM Sans', sans-serif;">Made by: Jana Sy</footer>
 </body>
 
 </html>

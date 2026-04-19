@@ -9,6 +9,7 @@ from ..models import Business, BusinessMembership, WorkShift, TimeClock, StaffPr
 
 User = get_user_model()
 
+# Shared helpers — mirrors the pattern used across other test modules
 def make_user(username, **kwargs):
     return User.objects.create_user(username=username, password='testpass123', **kwargs)
 
@@ -21,17 +22,15 @@ def make_membership(user, business, role=BusinessMembership.EMPLOYEE):
     return BusinessMembership.objects.create(user=user, business=business, role=role)
 
 
+# Default shift straddles "now" so it counts as active without extra arrangement
 def make_shift(business, user, start=None, end=None):
     now = timezone.now()
     start = start or (now - timedelta(hours=1))
     end = end or (now + timedelta(hours=1))
     return WorkShift.objects.create(business=business, user=user, start=start, end=end)
 
-
-# ---------------------------------------------------------------------------
-# Schedule access
-# ---------------------------------------------------------------------------
-
+# Tests for schedule read access — employees may view their own shifts but must
+# not be able to read the full branch calendar or modify any shift records
 class StaffScheduleTest(TestCase):
 
     def setUp(self):
@@ -42,6 +41,7 @@ class StaffScheduleTest(TestCase):
         make_membership(self.owner, self.business, BusinessMembership.OWNER)
         self.emp_membership = make_membership(self.employee, self.business, BusinessMembership.EMPLOYEE)
 
+        # Tomorrow's shift so it's clearly upcoming and won't be filtered by active-shift logic
         start = timezone.now() + timedelta(days=1)
         self.shift = WorkShift.objects.create(
             business=self.business,
@@ -53,6 +53,7 @@ class StaffScheduleTest(TestCase):
         )
 
     def test_employee_can_fetch_own_shifts_json(self):
+        # The staff-specific endpoint must return the employee's own shifts
         self.client.force_login(self.employee)
         resp = self.client.get(reverse('staff_branch_shifts_json', args=[self.business.id]))
         self.assertEqual(resp.status_code, 200)
@@ -60,6 +61,7 @@ class StaffScheduleTest(TestCase):
         self.assertIn(self.shift.id, ids)
 
     def test_employee_only_sees_own_shifts(self):
+        # The response must not leak another employee's shift IDs
         other = make_user('other_emp')
         make_membership(other, self.business, BusinessMembership.EMPLOYEE)
         other_shift = make_shift(self.business, other)
@@ -71,26 +73,26 @@ class StaffScheduleTest(TestCase):
         self.assertNotIn(other_shift.id, ids)
 
     def test_employee_cannot_fetch_all_branch_shifts_json(self):
+        # The owner/supervisor full-calendar endpoint must be blocked for plain employees
         self.client.force_login(self.employee)
         resp = self.client.get(reverse('branch_shifts_json', args=[self.business.id]))
         self.assertIn(resp.status_code, (302, 403))
 
     def test_employee_cannot_delete_shift(self):
+        # Shift deletion is owner/supervisor-only; the record must survive the attempt
         self.client.force_login(self.employee)
         resp = self.client.post(reverse('delete_shift', args=[self.business.id, self.shift.id]))
         self.assertIn(resp.status_code, (302, 403))
         self.assertTrue(WorkShift.objects.filter(id=self.shift.id).exists())
 
     def test_staff_dashboard_shows_pin_code(self):
+        # The PIN code must be visible on the dashboard so the employee can use it at the scanner
         self.client.force_login(self.employee)
         resp = self.client.get(reverse('dashboard'))
         self.assertIn(self.emp_membership.pin_code, resp.content.decode())
 
-
-# ---------------------------------------------------------------------------
-# Clock in / out
-# ---------------------------------------------------------------------------
-
+# Tests for self-service clock-in and clock-out via the dashboard buttons;
+# the active-shift gate must be enforced and non-members must be rejected
 class StaffClockTest(TestCase):
 
     def setUp(self):
@@ -101,6 +103,7 @@ class StaffClockTest(TestCase):
         make_membership(self.employee, self.business, BusinessMembership.EMPLOYEE)
 
     def test_employee_can_clock_in_during_active_shift(self):
+        # Successful clock-in must redirect to dashboard and leave an open TimeClock
         now = timezone.now()
         WorkShift.objects.create(
             business=self.business, user=self.employee,
@@ -112,11 +115,13 @@ class StaffClockTest(TestCase):
         self.assertTrue(TimeClock.objects.filter(user=self.employee, clock_out__isnull=True).exists())
 
     def test_employee_cannot_clock_in_without_active_shift(self):
+        # No shift scheduled → clock-in must be rejected with no TimeClock created
         self.client.force_login(self.employee)
         self.client.post(reverse('clock_in', args=[self.business.id]))
         self.assertFalse(TimeClock.objects.filter(user=self.employee).exists())
 
     def test_employee_can_clock_out(self):
+        # Pre-existing open TimeClock must be closed; no open record should remain afterwards
         TimeClock.objects.create(
             business=self.business, user=self.employee,
             clock_in=timezone.now() - timedelta(hours=1), clock_out=None,
@@ -126,6 +131,7 @@ class StaffClockTest(TestCase):
         self.assertFalse(TimeClock.objects.filter(user=self.employee, clock_out__isnull=True).exists())
 
     def test_non_member_cannot_clock_in(self):
+        # A user with no membership in this branch must be blocked and produce no TimeClock
         stranger = make_user('stranger')
         self.client.force_login(stranger)
         resp = self.client.post(reverse('clock_in', args=[self.business.id]))
@@ -133,6 +139,8 @@ class StaffClockTest(TestCase):
         self.assertFalse(TimeClock.objects.filter(user=stranger).exists())
 
 
+# my_hours is member-only; a user with no membership must be refused so they
+# cannot infer worked hours for employees at branches they don't belong to
 class MyHoursAccessTest(TestCase):
 
     def setUp(self):
@@ -147,6 +155,8 @@ class MyHoursAccessTest(TestCase):
         self.assertEqual(self.client.get(self.url).status_code, 403)
 
 
+# Verifies the my_qr_code view returns a valid PNG — duplicates the check in
+# test_qr.py at the staff level to catch regressions from permission changes
 class MyQRCodeTest(TestCase):
 
     def setUp(self):
@@ -160,6 +170,9 @@ class MyQRCodeTest(TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp['Content-Type'], 'image/png')
 
+
+# Employees must not be able to schedule shifts — shift creation is restricted
+# to owners and supervisors so that staff cannot manipulate their own roster
 class StaffScheduleBlockTest(TestCase):
     def setUp(self):
         self.business = make_business()
@@ -169,6 +182,7 @@ class StaffScheduleBlockTest(TestCase):
         make_membership(self.employee, self.business, BusinessMembership.EMPLOYEE)
 
     def test_employee_cannot_create_shift(self):
+        # The shift must not exist after a blocked attempt; created_by is a safe proxy for that
         self.client.force_login(self.employee)
         start = timezone.now() + timedelta(days=2)
         resp = self.client.post(reverse('create_shift', args=[self.business.id]), {
@@ -181,6 +195,8 @@ class StaffScheduleBlockTest(TestCase):
         self.assertFalse(WorkShift.objects.filter(created_by=self.employee).exists())
 
 
+# Employees must not reach owner-only management pages such as invite_staff or
+# assign_roles — these tests catch permission regressions at the view layer
 class StaffPageBlockTest(TestCase):
     def setUp(self):
         self.business = make_business()
@@ -194,12 +210,16 @@ class StaffPageBlockTest(TestCase):
         self.assertIn(resp.status_code, (302, 403))
 
     def test_employee_cannot_assign_roles(self):
+        # No StaffProfile must be created as a side-effect of the blocked POST
         self.client.force_login(self.employee)
         resp = self.client.post(reverse('assign_roles', args=[self.business.id]),
                                 {f'position_{self.emp_mem.id}': 'Kitchen'})
         self.assertIn(resp.status_code, (302, 403))
         self.assertFalse(StaffProfile.objects.filter(membership=self.emp_mem).exists())
 
+
+# Employees may only read their own hours JSON; fetching another employee's
+# hours must be refused to prevent cross-staff data leakage
 class StaffHoursAccessTest(TestCase):
     def setUp(self):
         self.business = make_business()

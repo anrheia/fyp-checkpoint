@@ -11,6 +11,7 @@ from ..models import Business, BusinessMembership, WorkShift, TimeClock
 User = get_user_model()
 
 
+# Shared helpers — mirrors the pattern used in other test modules
 def make_user(username, **kwargs):
     return User.objects.create_user(username=username, password='testpass123', **kwargs)
 
@@ -23,6 +24,7 @@ def make_membership(user, business, role=BusinessMembership.EMPLOYEE):
     return BusinessMembership.objects.create(user=user, business=business, role=role)
 
 
+# Default shift straddles "now" so clock-in tests have an active shift without extra setup
 def make_shift(business, user, start=None, end=None):
     now = timezone.now()
     start = start or (now - timedelta(hours=1))
@@ -34,6 +36,7 @@ def make_shift(business, user, start=None, end=None):
 # QR code generation
 # ---------------------------------------------------------------------------
 
+# Verifies the my_qr_code view returns a valid PNG image, not HTML or an error
 class MyQRCodeViewTests(TestCase):
 
     def setUp(self):
@@ -47,6 +50,9 @@ class MyQRCodeViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response['Content-Type'], 'image/png')
 
+
+# The scanner page is only for staff who can clock others in — employees use their
+# own QR code and must not be able to reach the scanning interface
 class QRScannerViewTests(TestCase):
 
     def setUp(self):
@@ -69,6 +75,10 @@ class QRScannerViewTests(TestCase):
     def test_employee_cannot_access_scanner(self):
         self.client.login(username='emp1', password='testpass123')
         self.assertEqual(self.client.get(reverse('qr_scanner', args=[self.business.id])).status_code, 403)
+
+
+# Happy-path and guard tests for QR clock-in; setUp has an active shift so
+# the scan should succeed without extra arrangement
 class ProcessQRScanClockInTests(TestCase):
 
     def setUp(self):
@@ -90,24 +100,29 @@ class ProcessQRScanClockInTests(TestCase):
         self.assertEqual(response.json()['action'], 'clocked_in')
 
     def test_clock_in_creates_timeclock_record(self):
+        # An open TimeClock (clock_out=None) must exist after a successful scan
         self._scan(self.emp_membership.qr_token)
         self.assertTrue(TimeClock.objects.filter(
             business=self.business, user=self.employee, clock_out__isnull=True
         ).exists())
 
     def test_token_regenerates_after_clock_in(self):
+        # Token rotation prevents the same QR code being reused for a second clock-in
         old_token = self.emp_membership.qr_token
         self._scan(old_token)
         self.emp_membership.refresh_from_db()
         self.assertNotEqual(self.emp_membership.qr_token, old_token)
 
     def test_clock_in_requires_active_shift(self):
+        # Without a scheduled shift the scan must fail with a clear error, not silently succeed
         self.shift.delete()
         self.emp_membership.refresh_from_db()
         response = self._scan(self.emp_membership.qr_token)
         self.assertEqual(response.status_code, 400)
         self.assertIn('no active shift', response.json()['error'].lower())
 
+
+# setUp pre-creates an open TimeClock so the scan resolves as a clock-out, not clock-in
 class ProcessQRScanClockOutTests(TestCase):
 
     def setUp(self):
@@ -133,11 +148,15 @@ class ProcessQRScanClockOutTests(TestCase):
         self.assertEqual(response.json()['action'], 'clocked_out')
 
     def test_clock_out_closes_timeclock_record(self):
+        # After clock-out there must be no open TimeClock (clock_out should be set)
         self._scan(self.emp_membership.qr_token)
         self.assertFalse(TimeClock.objects.filter(
             business=self.business, user=self.employee, clock_out__isnull=True
         ).exists())
 
+
+# Employees must only be able to clock themselves in via their own QR code through
+# the scanner page; scanning someone else's code must be rejected
 class ProcessQRScanPermissionTests(TestCase):
 
     def setUp(self):
@@ -159,11 +178,15 @@ class ProcessQRScanPermissionTests(TestCase):
         self.assertEqual(self._scan(self.emp_membership.qr_token).status_code, 403)
 
     def test_supervisor_of_same_branch_can_scan(self):
+        # Supervisors operate the scanner on behalf of employees, so they must be allowed
         sup = make_user('sup1')
         make_membership(sup, self.business, BusinessMembership.SUPERVISOR)
         self.client.login(username='sup1', password='testpass123')
         self.assertEqual(self._scan(self.emp_membership.qr_token).status_code, 200)
 
+
+# PIN clock-in mirrors the QR flow but uses a 6-character code instead of a UUID token;
+# both the PIN and the QR token rotate together after each use
 class ProcessPinScanClockInTests(TestCase):
 
     def setUp(self):
@@ -192,6 +215,7 @@ class ProcessPinScanClockInTests(TestCase):
         ).exists())
 
     def test_pin_and_token_regenerate_after_pin_scan(self):
+        # Both credentials rotate together so a single scan can't be replayed via either method
         old_pin = self.emp_membership.pin_code
         old_token = self.emp_membership.qr_token
         self._scan_pin(old_pin)
@@ -200,12 +224,15 @@ class ProcessPinScanClockInTests(TestCase):
         self.assertNotEqual(self.emp_membership.qr_token, old_token)
 
     def test_pin_requires_active_shift(self):
+        # PIN clock-in enforces the same active-shift requirement as QR clock-in
         self.shift.delete()
         self.emp_membership.refresh_from_db()
         response = self._scan_pin(self.emp_membership.pin_code)
         self.assertEqual(response.status_code, 400)
         self.assertIn('no active shift', response.json()['error'].lower())
 
+
+# setUp pre-creates an open TimeClock so the PIN scan resolves as clock-out
 class ProcessPinScanClockOutTests(TestCase):
 
     def setUp(self):
@@ -237,6 +264,9 @@ class ProcessPinScanClockOutTests(TestCase):
             business=self.business, user=self.employee, clock_out__isnull=True
         ).exists())
 
+
+# Permission matrix for PIN scanning — same rules as QR but verified independently
+# since the PIN and QR endpoints are separate views
 class ProcessPinScanPermissionTests(TestCase):
 
     def setUp(self):
