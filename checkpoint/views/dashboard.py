@@ -56,39 +56,59 @@ def dashboard(request):
             "chat_limit": DAILY_CHAT_LIMIT,
         })
 
-    supervisor_membership = BusinessMembership.objects.filter(
+    supervisor_memberships = BusinessMembership.objects.filter(
         user=request.user,
         role=BusinessMembership.SUPERVISOR
-    ).select_related("business").first()
-    if supervisor_membership:
-        business = supervisor_membership.business
-        status = compute_staff_status(business)
-        staff_memberships = BusinessMembership.objects.filter(
-            business=business,
-            role__in=[BusinessMembership.EMPLOYEE, BusinessMembership.SUPERVISOR]
-        ).select_related('user', 'profile').order_by('user__username')
+    ).select_related("business")
 
-        messageable_members = BusinessMembership.objects.filter(
-            business=business,
-        ).select_related('user').exclude(user=request.user).exclude(user__email="").order_by('role', 'user__username')
-
-        chat_used = request.session.get(f'chat_{timezone.localdate().isoformat()}', 0)
-        return render(request, "dashboard/supervisor_dashboard.html", {
-            "business": business,
-            "staff_memberships": staff_memberships,
-            "messageable_members": messageable_members,
-            "chat_used": chat_used,
-            "chat_limit": DAILY_CHAT_LIMIT,
-            **status
-        })
-
-    staff_membership = BusinessMembership.objects.filter(
+    employee_memberships = BusinessMembership.objects.filter(
         user=request.user,
         role=BusinessMembership.EMPLOYEE
-    ).select_related("business").first()
+    ).select_related("business")
+
+    has_supervisor = supervisor_memberships.exists()
+    has_employee = employee_memberships.exists()
+    show_role_switcher = has_supervisor and has_employee
+    preferred_view = request.session.get('dashboard_view', 'supervisor') if show_role_switcher else ('supervisor' if has_supervisor else 'employee')
+
+    if has_supervisor and preferred_view == 'supervisor':
+        branches_with_status = []
+        for sup_mem in supervisor_memberships:
+            business = sup_mem.business
+            status = compute_staff_status(business)
+            staff_memberships = BusinessMembership.objects.filter(
+                business=business,
+                role__in=[BusinessMembership.EMPLOYEE, BusinessMembership.SUPERVISOR]
+            ).select_related('user', 'profile').order_by('user__username')
+            messageable_members = BusinessMembership.objects.filter(
+                business=business,
+            ).select_related('user').exclude(user=request.user).exclude(user__email="").order_by('role', 'user__username')
+            branches_with_status.append({
+                "branch": business,
+                "staff_memberships": staff_memberships,
+                "messageable_members": messageable_members,
+                **status,
+            })
+
+        primary_business = supervisor_memberships.first().business
+        chat_used = request.session.get(f'chat_{timezone.localdate().isoformat()}', 0)
+        return render(request, "dashboard/supervisor_dashboard.html", {
+            "business": primary_business,
+            "branches_with_status": branches_with_status,
+            "chat_used": chat_used,
+            "chat_limit": DAILY_CHAT_LIMIT,
+            "show_role_switcher": show_role_switcher,
+            "current_view": "supervisor",
+        })
+
+    staff_membership = employee_memberships.first() if has_employee else None
 
     if not staff_membership:
-        return render(request, "dashboard/staff_dashboard.html", {"business": None})
+        return render(request, "dashboard/staff_dashboard.html", {
+            "business": None,
+            "show_role_switcher": show_role_switcher,
+            "current_view": "employee",
+        })
 
     business = staff_membership.business
 
@@ -101,7 +121,16 @@ def dashboard(request):
         "business": business,
         "supervisors": supervisors,
         "pin_code": staff_membership.pin_code,
+        "show_role_switcher": show_role_switcher,
+        "current_view": "employee",
     })
+
+
+@login_required
+def switch_dashboard_view(request):
+    current = request.session.get('dashboard_view', 'supervisor')
+    request.session['dashboard_view'] = 'employee' if current == 'supervisor' else 'supervisor'
+    return redirect('dashboard')
 
 
 @login_required

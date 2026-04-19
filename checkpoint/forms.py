@@ -6,9 +6,11 @@ from .models import Business, BusinessMembership, WorkShift, StaffProfile
 
 User = get_user_model()
 
+# Used on the public signup page; business_name is handled by the view, not saved here
 class OwnerSignUpForm(UserCreationForm):
     email = forms.EmailField(required=True)
     business_name = forms.CharField(max_length=255)
+
     class Meta:
         model = User
         fields = ('username', 'email', 'business_name', 'password1', 'password2')
@@ -22,11 +24,12 @@ class OwnerSignUpForm(UserCreationForm):
     def save(self, commit=True):
         user = super().save(commit=False)
         user.email = self.cleaned_data['email']
-
         if commit:
             user.save()
         return user
 
+
+# Login form with project styles applied; no logic changes from Django's default
 class StyledAuthenticationForm(AuthenticationForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -34,11 +37,16 @@ class StyledAuthenticationForm(AuthenticationForm):
             field.widget.attrs.update({'class': 'input input-bordered w-full'})
             field.help_text = ''
 
+
+# Minimal form for creating a new branch; name is the only editable field
 class NewBranchForm(forms.ModelForm):
     class Meta:
         model = Business
         fields = ('name',)
 
+
+# Creates a new User account for an invited staff member; the role field is
+# read by the view to set the BusinessMembership role, not saved on the User model
 class InviteStaffForm(forms.ModelForm):
     role = forms.ChoiceField(
         choices=[
@@ -48,6 +56,7 @@ class InviteStaffForm(forms.ModelForm):
         initial=BusinessMembership.EMPLOYEE,
         required=True,
     )
+
     class Meta:
         model = User
         fields = ('first_name', 'last_name', 'username', 'email')
@@ -65,6 +74,7 @@ class InviteStaffForm(forms.ModelForm):
             field.help_text = ''
 
     def clean_email(self):
+        # Normalise before uniqueness check so "User@Example.com" doesn't slip through
         email = self.cleaned_data['email'].lower().strip()
         if User.objects.filter(email=email).exists():
             raise forms.ValidationError("A user with this email already exists.")
@@ -76,6 +86,9 @@ class InviteStaffForm(forms.ModelForm):
             raise forms.ValidationError("A user with this username already exists.")
         return username
 
+
+# Schedule form used on the branch schedule page; datetime-local widgets
+# let the browser render a native date/time picker
 class WorkShiftForm(forms.ModelForm):
     class Meta:
         model = WorkShift
@@ -96,6 +109,9 @@ class WorkShiftForm(forms.ModelForm):
                 field.widget.attrs.update({'class': 'input input-bordered w-full'})
             field.help_text = ''
 
+
+# Edits both StaffProfile fields and the related User fields in one form;
+# first_name/last_name/email are User fields written back via save_user_fields()
 class StaffProfileForm(forms.ModelForm):
     first_name = forms.CharField(required=False)
     last_name = forms.CharField(required=False)
@@ -113,6 +129,7 @@ class StaffProfileForm(forms.ModelForm):
 
     def __init__(self, *args, user=None, **kwargs):
         super().__init__(*args, **kwargs)
+        # Pre-populate User fields so they appear filled in when the form loads
         if user:
             self.fields['first_name'].initial = user.first_name
             self.fields['last_name'].initial = user.last_name
@@ -125,11 +142,14 @@ class StaffProfileForm(forms.ModelForm):
             field.help_text = ''
 
     def save_user_fields(self, user):
+        # Called after form.save() to write the User-model fields that aren't on StaffProfile
         user.first_name = self.cleaned_data.get('first_name', user.first_name)
         user.last_name = self.cleaned_data.get('last_name', user.last_name)
         user.email = self.cleaned_data.get('email', user.email)
         user.save(update_fields=['first_name', 'last_name', 'email'])
 
+
+# Password change form shown on first login; styled to match the rest of the UI
 class StyledPasswordChangeForm(PasswordChangeForm):
     INPUT_STYLE = "display: block; width: 100%; background: white; border: 1.5px solid oklch(82% 0.03 195); border-radius: 0.75rem; padding: 0.5rem 0.75rem; font-family: 'DM Sans', sans-serif; font-size: 0.875rem; color: oklch(28% 0.04 195); outline: none; box-sizing: border-box;"
 

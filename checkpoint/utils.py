@@ -446,8 +446,13 @@ def extract_hours_query(message: str, today_iso: str) -> dict:
         model="gpt-4o-mini",
         instructions=(
             f"Today is {today_iso}.\n"
-            "Extract: the staff member's name (or null if asking about all staff or most hours), "
-            "which week ('this' or 'next'), and the restaurant/branch name.\n"
+            "Extract the staff member's name, which week, and the branch/restaurant name from a work-hours question.\n"
+            "The message typically follows the pattern: 'how many hours does [PERSON NAME] have [this/next] week [at/in BRANCH NAME]?'\n"
+            "person_name: the person whose hours are being asked about — the name that follows 'does', 'did', 'has', or 'for'. Set to null if asking about all staff.\n"
+            "branch_name: the restaurant or location name that appears after 'at' or 'in'. Set to null if no branch is mentioned.\n"
+            "Do NOT put a person's name in branch_name. Do NOT put a branch name in person_name.\n"
+            "Example: 'how many hours does John Smith have this week at Luigi's' → person_name='John Smith', branch_name=\"Luigi's\".\n"
+            "Example: 'how many hours does Papa Cookeria have this week' → person_name='Papa Cookeria', branch_name=null.\n"
             "Default week to 'this' if not specified.\n"
             "Return ONLY JSON matching the schema."
         ),
@@ -533,3 +538,87 @@ def extract_schedule_query(message: str, today_iso: str) -> dict:
     except Exception:
         # if parsing fails, return safe nulls
         return {"date": None, "branch_name": None}
+
+
+def extract_shift_creation_query(message: str, today_iso: str) -> dict:
+    # Parses a natural-language scheduling request into structured fields for WorkShift creation
+    msg = (message or "").strip()
+    if not msg:
+        return {"person_name": None, "branch_name": None, "date": None, "start_time": None, "end_time": None}
+
+    schema = {
+        "name": "shift_creation_query",
+        "schema": {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "person_name": {
+                    "type": ["string", "null"],
+                    "description": "Full name of the employee to schedule"
+                },
+                "branch_name": {
+                    "type": ["string", "null"],
+                    "description": "Restaurant/branch name if mentioned, else null"
+                },
+                "date": {
+                    "type": ["string", "null"],
+                    "description": "YYYY-MM-DD"
+                },
+                "start_time": {
+                    "type": ["string", "null"],
+                    "description": "HH:MM in 24-hour format"
+                },
+                "end_time": {
+                    "type": ["string", "null"],
+                    "description": "HH:MM in 24-hour format"
+                }
+            },
+            "required": ["person_name", "branch_name", "date", "start_time", "end_time"]
+        }
+    }
+
+    client = _get_client()
+    resp = client.responses.create(
+        model="gpt-4o-mini",
+        instructions=(
+            f"Today is {today_iso} in Europe/Dublin.\n"
+            "Extract the employee's full name, branch name, date, start time, and end time from the scheduling request.\n"
+            "The message typically follows the pattern: 'schedule [PERSON NAME] in [BRANCH NAME] for [TIME RANGE] on [DAY]'.\n"
+            "person_name is the name immediately after 'schedule' and before the word 'in' (or 'at') that precedes the branch.\n"
+            "branch_name is the restaurant/location name that comes after 'in' or 'at', before 'for'.\n"
+            "Do NOT include 'in [branch]' as part of person_name. Do NOT include the person's name as part of branch_name.\n"
+            "Names may be in any capitalisation (e.g. 'john smith', 'JOHN SMITH', 'John Smith') — extract them exactly as written.\n"
+            "Example: 'schedule John Smith in Luigi's for 9-17 on Friday' → person_name='John Smith', branch_name=\"Luigi's\".\n"
+            "Relative day rules:\n"
+            f"- 'today' means {today_iso}.\n"
+            "- 'tomorrow' means the day after today.\n"
+            "- If the user says a weekday like 'Friday' with no qualifier, choose the NEXT occurrence after today.\n"
+            "- 'next Friday' means the next Friday after today.\n"
+            "Convert all times to 24-hour HH:MM format.\n"
+            "If any field is missing or unclear, return null for that field.\n"
+            "Return ONLY JSON matching the schema."
+        ),
+        input=msg,
+        text={
+            "format": {
+                "type": "json_schema",
+                "name": schema["name"],
+                "schema": schema["schema"],
+                "strict": True
+            }
+        },
+        max_output_tokens=150
+    )
+
+    raw = (resp.output_text or "").strip()
+    try:
+        parsed = json.loads(raw)
+        return {
+            "person_name": parsed.get("person_name"),
+            "branch_name": parsed.get("branch_name"),
+            "date": parsed.get("date"),
+            "start_time": parsed.get("start_time"),
+            "end_time": parsed.get("end_time"),
+        }
+    except Exception:
+        return {"person_name": None, "branch_name": None, "date": None, "start_time": None, "end_time": None}

@@ -104,7 +104,7 @@ function initScheduleChat({ messagesId, inputId, sendBtnId, apiUrl, counterId = 
 
     function clearChat() {
         msgs.innerHTML = '';
-        appendMessage('bot', "Chat cleared. Prompts to try:\n- Who's working Friday?\n- How many hours does John have this week?\n- Who's late right now?\n- Who's not scheduled next week?\n- Do any shifts overlap on Saturday?");
+        appendMessage('bot', "Chat cleared. Prompts to try:\n- Who's working Friday?\n- How many hours does John have this week?\n- Who's late right now?\n- Who's not scheduled next week?\n- Do any shifts overlap on Saturday?\n- Schedule John Smith for 9:00–17:00 on Friday");
     }
 
     sendBtn.addEventListener('click', sendMessage);

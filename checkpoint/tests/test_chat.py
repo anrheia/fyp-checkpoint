@@ -14,6 +14,7 @@ User = get_user_model()
 CHAT_API = 'schedule_chat_api'
 
 
+# Creates an owner user and a business, returns both
 def _setup_owner(username='owner'):
     owner = User.objects.create_user(username=username, password='pass',
                                      first_name='Alice', last_name='Smith')
@@ -22,6 +23,7 @@ def _setup_owner(username='owner'):
     return owner, business
 
 
+# Creates an employee user and attaches them to the given business
 def _add_employee(business, username, first, last):
     emp = User.objects.create_user(username=username, password='pass',
                                    first_name=first, last_name=last)
@@ -30,6 +32,7 @@ def _add_employee(business, username, first, last):
     return emp, mem
 
 
+# Creates a WorkShift for a user on a given date, defaults to 9–17
 def _shift(business, user, date, start_h=9, end_h=17):
     tz = timezone.get_current_timezone()
     return WorkShift.objects.create(
@@ -38,6 +41,8 @@ def _shift(business, user, date, start_h=9, end_h=17):
         end=timezone.make_aware(datetime(date.year, date.month, date.day, end_h, 0), tz),
     )
 
+
+# Tests that the daily message limit is enforced and session usage is tracked
 @override_settings(USE_TZ=True, TIME_ZONE="UTC")
 class ChatRateLimitTests(TestCase):
     def setUp(self):
@@ -45,6 +50,7 @@ class ChatRateLimitTests(TestCase):
         self.owner, _ = _setup_owner()
         self.client.login(username='owner', password='pass')
 
+    # Writes a usage count into the session for today's date key
     def _set_usage(self, count):
         from checkpoint.views.chat import DAILY_CHAT_LIMIT as LIMIT
         session = self.client.session
@@ -52,6 +58,7 @@ class ChatRateLimitTests(TestCase):
         session.save()
         return LIMIT
 
+    # Once the limit is hit the API should flag limit_reached and mention 'limit' in the answer
     def test_at_limit_returns_limit_reached(self):
         limit = self._set_usage(30)
         self._set_usage(limit)
@@ -60,6 +67,7 @@ class ChatRateLimitTests(TestCase):
         self.assertTrue(data.get('limit_reached'))
         self.assertIn('limit', data['answer'].lower())
 
+    # A successful request should increment the session counter by 1
     def test_usage_increments_after_successful_message(self):
         self._set_usage(0)
         with patch('checkpoint.views.chat.extract_schedule_query',
@@ -67,6 +75,9 @@ class ChatRateLimitTests(TestCase):
             self.client.post(self.url, {'message': 'something'})
         count = self.client.session.get(f'chat_{timezone.localdate().isoformat()}', 0)
         self.assertEqual(count, 1)
+
+
+# Tests that 'who is working' queries return the correct staff for a given date
 @override_settings(USE_TZ=True, TIME_ZONE="UTC")
 class ChatWhoIsWorkingTests(TestCase):
     def setUp(self):
@@ -75,6 +86,7 @@ class ChatWhoIsWorkingTests(TestCase):
         self.emp, _ = _add_employee(self.business, 'emp', 'Bob', 'Jones')
         self.client.login(username='owner', password='pass')
 
+    # When a shift exists for today the response should contain the employee's name
     def test_specific_date_returns_scheduled_employee(self):
         today = timezone.localdate()
         _shift(self.business, self.emp, today)
@@ -83,6 +95,7 @@ class ChatWhoIsWorkingTests(TestCase):
             response = self.client.post(self.url, {'message': f'who is working on {today}'})
         self.assertIn('Bob', response.json()['answer'])
 
+    # When no shifts exist the response should say no one is scheduled
     def test_no_shifts_returns_not_scheduled_message(self):
         today = timezone.localdate()
         with patch('checkpoint.views.chat.extract_schedule_query',
@@ -90,6 +103,8 @@ class ChatWhoIsWorkingTests(TestCase):
             response = self.client.post(self.url, {'message': f'who is working on {today}'})
         self.assertIn('No one is scheduled', response.json()['answer'])
 
+
+# Tests that unscheduled employees appear in the 'who is off' response
 @override_settings(USE_TZ=True, TIME_ZONE="UTC")
 class ChatWhoIsOffTests(TestCase):
     def setUp(self):
@@ -99,10 +114,12 @@ class ChatWhoIsOffTests(TestCase):
         self.emp2, _ = _add_employee(self.business, 'emp2', 'Carol', 'White')
         self.client.login(username='owner', password='pass')
 
+    # Returns the date of the most recent Monday
     def _this_monday(self):
         today = timezone.localdate()
         return today - timedelta(days=today.weekday())
 
+    # Only the employee without a shift this week should appear in the off list
     def test_unscheduled_employee_appears_in_off_list(self):
         monday = self._this_monday()
         _shift(self.business, self.emp1, monday)
@@ -113,6 +130,8 @@ class ChatWhoIsOffTests(TestCase):
         self.assertIn('Carol', answer)
         self.assertNotIn('Bob', answer)
 
+
+# Tests that shift counts per employee are accurate for the current week
 @override_settings(USE_TZ=True, TIME_ZONE="UTC")
 class ChatShiftCountTests(TestCase):
     def setUp(self):
@@ -122,6 +141,7 @@ class ChatShiftCountTests(TestCase):
         self.emp2, _ = _add_employee(self.business, 'emp2', 'Carol', 'White')
         self.client.login(username='owner', password='pass')
 
+    # Each employee's name and their shift count for the week should appear in the answer
     def test_shift_counts_returned_for_all_staff(self):
         monday = timezone.localdate() - timedelta(days=timezone.localdate().weekday())
         for i in range(3):
@@ -136,6 +156,8 @@ class ChatShiftCountTests(TestCase):
         self.assertIn('Carol', answer)
         self.assertIn('1', answer)
 
+
+# Tests detection of overlapping and non-overlapping shifts on the same day
 @override_settings(USE_TZ=True, TIME_ZONE="UTC")
 class ChatOverlappingShiftsTests(TestCase):
     def setUp(self):
@@ -145,6 +167,7 @@ class ChatOverlappingShiftsTests(TestCase):
         self.emp2, _ = _add_employee(self.business, 'emp2', 'Carol', 'White')
         self.client.login(username='owner', password='pass')
 
+    # Overlapping shifts should list both employees and the ↔ indicator
     def test_overlapping_shifts_shows_both_names(self):
         target = timezone.localdate()
         _shift(self.business, self.emp1, target, start_h=9, end_h=17)
@@ -157,6 +180,7 @@ class ChatOverlappingShiftsTests(TestCase):
         self.assertIn('Carol', answer)
         self.assertIn('↔', answer)
 
+    # Non-overlapping shifts should report no overlaps found
     def test_non_overlapping_shifts_returns_no_overlaps(self):
         target = timezone.localdate()
         _shift(self.business, self.emp1, target, start_h=9, end_h=13)
@@ -166,6 +190,8 @@ class ChatOverlappingShiftsTests(TestCase):
             response = self.client.post(self.url, {'message': f'who is working at the same time on {target}'})
         self.assertIn('No overlapping', response.json()['answer'])
 
+
+# Tests that an employee's assigned position is returned when asked
 @override_settings(USE_TZ=True, TIME_ZONE="UTC")
 class ChatPositionTests(TestCase):
     def setUp(self):
@@ -174,6 +200,7 @@ class ChatPositionTests(TestCase):
         self.emp, self.mem = _add_employee(self.business, 'emp', 'Bob', 'Jones')
         self.client.login(username='owner', password='pass')
 
+    # When a StaffProfile position is set it should appear in the answer alongside the name
     def test_position_returned_when_assigned(self):
         StaffProfile.objects.create(membership=self.mem, position='Kitchen')
         with patch('checkpoint.views.chat.extract_person_schedule_query',
@@ -183,6 +210,8 @@ class ChatPositionTests(TestCase):
         self.assertIn('Kitchen', answer)
         self.assertIn('Bob', answer)
 
+
+# Tests that the chat API responds quickly enough for real-time use
 @override_settings(USE_TZ=True, TIME_ZONE="UTC")
 class ChatResponseTimingTests(TestCase):
     def setUp(self):
@@ -190,6 +219,7 @@ class ChatResponseTimingTests(TestCase):
         self.owner, self.business = _setup_owner()
         self.client.login(username='owner', password='pass')
 
+    # Full round-trip for a schedule query should complete in under 1 second
     def test_response_returns_within_one_second(self):
         with patch('checkpoint.views.chat.extract_schedule_query',
                    return_value={'date': timezone.localdate().isoformat(), 'branch_name': None}):
@@ -198,6 +228,8 @@ class ChatResponseTimingTests(TestCase):
             elapsed = time.time() - start
         self.assertLess(elapsed, 1.0, f"Response took {elapsed:.2f}s — expected under 1s")
 
+
+# Tests that unrecognised queries still return a graceful, non-empty JSON answer
 @override_settings(USE_TZ=True, TIME_ZONE="UTC")
 class ChatErrorMessageTests(TestCase):
     def setUp(self):
@@ -205,6 +237,7 @@ class ChatErrorMessageTests(TestCase):
         self.owner, _ = _setup_owner()
         self.client.login(username='owner', password='pass')
 
+    # An unrecognised message should return HTTP 200 with a non-empty 'answer' string
     def test_unrecognised_query_returns_valid_json_answer(self):
         with patch('checkpoint.views.chat.extract_schedule_query',
                    return_value={'date': None, 'branch_name': None}):

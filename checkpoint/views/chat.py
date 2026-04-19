@@ -1,4 +1,5 @@
 import re as _re
+import unicodedata
 from collections import defaultdict
 from datetime import datetime, timedelta, time
 
@@ -16,12 +17,31 @@ from ..utils import (
     extract_hours_query,
     extract_coverage_query,
     extract_person_schedule_query,
+    extract_shift_creation_query,
     extract_weekday_request,
     next_weekday,
     compute_staff_status,
 )
 
 User = get_user_model()
+
+# Strip accents, then drop everything that isn't a letter, digit, or space
+def _normalize_name(s):
+    s = unicodedata.normalize('NFD', s)
+    s = ''.join(c for c in s if unicodedata.category(c) != 'Mn')
+    s = _re.sub(r"[^\w\s]", "", s, flags=_re.UNICODE)
+    return s.lower().strip()
+
+# Tries exact substring match first; fall back to normalized match so that
+# special characters (apostrophes, accents, &, etc.) don't break lookups
+def _find_branch(owned_ids, branch_name):
+    matches = Business.objects.filter(id__in=owned_ids, name__icontains=branch_name).order_by("name")
+    if matches.exists():
+        return matches
+    norm = _normalize_name(branch_name)
+    all_branches = Business.objects.filter(id__in=owned_ids).order_by("name")
+    matched_ids = [b.id for b in all_branches if norm in _normalize_name(b.name)]
+    return Business.objects.filter(id__in=matched_ids).order_by("name")
 
 DAILY_CHAT_LIMIT = 30
 
@@ -77,7 +97,7 @@ def schedule_chat_api(request):
         ).values_list("business_id", flat=True)
 
         if branch_name:
-            matches = Business.objects.filter(id__in=owned_ids, name__icontains=branch_name).order_by("name")
+            matches = _find_branch(owned_ids, branch_name)
             if matches.count() == 0:
                 return JsonResponse({"answer": f"I couldn't find a branch matching '{branch_name}'."})
             if matches.count() > 1:
@@ -125,7 +145,7 @@ def schedule_chat_api(request):
         ).values_list("business_id", flat=True)
 
         if branch_name:
-            matches = Business.objects.filter(id__in=owned_ids, name__icontains=branch_name).order_by("name")
+            matches = _find_branch(owned_ids, branch_name)
             if matches.count() == 0:
                 return JsonResponse({"answer": "I couldn't find a branch matching '" + branch_name + "'."})
             if matches.count() > 1:
@@ -135,10 +155,10 @@ def schedule_chat_api(request):
         else:
             owned = Business.objects.filter(id__in=owned_ids).order_by("name")
             if owned.count() == 0:
-                return JsonResponse({"answer": "You don't seem to own any branches yet."})
+                return JsonResponse({"answer": "You don't manage any branches yet."})
             if owned.count() > 1 and not person_name:
                 options = ", ".join(owned.values_list("name", flat=True)[:8])
-                return JsonResponse({"answer": "Which branch? You own: " + options + ". Ask like: who has the most hours next week at Luigi's?"})
+                return JsonResponse({"answer": "Which branch? You manage:" + options + ". Ask like: who has the most hours next week at Luigi's?"})
             business = owned.first()
 
         today_date = timezone.localdate()
@@ -192,7 +212,7 @@ def schedule_chat_api(request):
         ).values_list("business_id", flat=True)
 
         if branch_name:
-            matches = Business.objects.filter(id__in=owned_ids, name__icontains=branch_name).order_by("name")
+            matches = _find_branch(owned_ids, branch_name)
             if matches.count() == 0:
                 return JsonResponse({"answer": f"I couldn't find a branch matching '{branch_name}'."})
             if matches.count() > 1:
@@ -202,10 +222,10 @@ def schedule_chat_api(request):
         else:
             owned = Business.objects.filter(id__in=owned_ids).order_by("name")
             if owned.count() == 0:
-                return JsonResponse({"answer": "You don't seem to own any branches yet."})
+                return JsonResponse({"answer": "You don't manage any branches yet."})
             if owned.count() > 1 and not person_name:
                 options = ", ".join(owned.values_list("name", flat=True)[:8])
-                return JsonResponse({"answer": f"Which branch? You own: {options}."})
+                return JsonResponse({"answer": f"Which branch? You manage:{options}."})
             business = owned.first()
 
         today_date = timezone.localdate()
@@ -274,7 +294,7 @@ def schedule_chat_api(request):
         ).values_list("business_id", flat=True)
 
         if branch_name:
-            matches = Business.objects.filter(id__in=owned_ids, name__icontains=branch_name).order_by("name")
+            matches = _find_branch(owned_ids, branch_name)
             if matches.count() == 0:
                 return JsonResponse({"answer": "I couldn't find a branch matching '" + branch_name + "'."})
             if matches.count() > 1:
@@ -284,10 +304,10 @@ def schedule_chat_api(request):
         else:
             owned = Business.objects.filter(id__in=owned_ids).order_by("name")
             if owned.count() == 0:
-                return JsonResponse({"answer": "You don't seem to own any branches yet."})
+                return JsonResponse({"answer": "You don't manage any branches yet."})
             if owned.count() > 1:
                 options = ", ".join(owned.values_list("name", flat=True)[:8])
-                return JsonResponse({"answer": "Which branch? You own: " + options + ". Ask like: how many staff on Saturday at Luigi's?"})
+                return JsonResponse({"answer": "Which branch? You manage:" + options + ". Ask like: how many staff on Saturday at Luigi's?"})
             business = owned.first()
 
         tz = timezone.get_current_timezone()
@@ -371,7 +391,7 @@ def schedule_chat_api(request):
             return JsonResponse({"answer": "I couldn't find anyone called '" + person_name + "' in your branches."})
 
         if branch_name:
-            businesses = list(Business.objects.filter(id__in=owned_ids, name__icontains=branch_name).order_by("name"))
+            businesses = list(_find_branch(owned_ids, branch_name))
             if not businesses:
                 return JsonResponse({"answer": "I couldn't find a branch matching '" + branch_name + "'."})
         else:
@@ -422,13 +442,13 @@ def schedule_chat_api(request):
         ).values_list("business_id", flat=True)
 
         if branch_name:
-            businesses = list(Business.objects.filter(id__in=owned_ids, name__icontains=branch_name).order_by("name"))
+            businesses = list(_find_branch(owned_ids, branch_name))
             if not businesses:
                 return JsonResponse({"answer": f"I couldn't find a branch matching '{branch_name}'."})
         else:
             businesses = list(Business.objects.filter(id__in=owned_ids).order_by("name"))
             if not businesses:
-                return JsonResponse({"answer": "You don't seem to own any branches yet."})
+                return JsonResponse({"answer": "You don't manage any branches yet."})
 
         name_lower = person_name.lower()
         memberships = BusinessMembership.objects.filter(
@@ -468,7 +488,7 @@ def schedule_chat_api(request):
         ).values_list("business_id", flat=True)
 
         if branch_name:
-            matches = Business.objects.filter(id__in=owned_ids, name__icontains=branch_name).order_by("name")
+            matches = _find_branch(owned_ids, branch_name)
             if matches.count() == 0:
                 return JsonResponse({"answer": f"I couldn't find a branch matching '{branch_name}'."})
             if matches.count() > 1:
@@ -478,10 +498,10 @@ def schedule_chat_api(request):
         else:
             owned = Business.objects.filter(id__in=owned_ids).order_by("name")
             if owned.count() == 0:
-                return JsonResponse({"answer": "You don't seem to own any branches yet."})
+                return JsonResponse({"answer": "You don't manage any branches yet."})
             if owned.count() > 1:
                 options = ", ".join(owned.values_list("name", flat=True)[:8])
-                return JsonResponse({"answer": f"Which branch? You own: {options}."})
+                return JsonResponse({"answer": f"Which branch? You manage:{options}."})
             business = owned.first()
 
         today_date = timezone.localdate()
@@ -547,7 +567,7 @@ def schedule_chat_api(request):
         ).values_list("business_id", flat=True)
 
         if branch_name:
-            matches = Business.objects.filter(id__in=owned_ids, name__icontains=branch_name).order_by("name")
+            matches = _find_branch(owned_ids, branch_name)
             if matches.count() == 0:
                 return JsonResponse({"answer": f"I couldn't find a branch matching '{branch_name}'."})
             if matches.count() > 1:
@@ -557,10 +577,10 @@ def schedule_chat_api(request):
         else:
             owned = Business.objects.filter(id__in=owned_ids).order_by("name")
             if owned.count() == 0:
-                return JsonResponse({"answer": "You don't seem to own any branches yet."})
+                return JsonResponse({"answer": "You don't manage any branches yet."})
             if owned.count() > 1:
                 options = ", ".join(owned.values_list("name", flat=True)[:8])
-                return JsonResponse({"answer": f"Which branch? You own: {options}."})
+                return JsonResponse({"answer": f"Which branch? You manage:{options}."})
             business = owned.first()
 
         tz = timezone.get_current_timezone()
@@ -595,7 +615,104 @@ def schedule_chat_api(request):
 
         return JsonResponse({"answer": f"Overlapping shifts at {business.name} on {date_label}:\n" + "\n".join(pairs)})
 
-    # Default intent: who is working on a given day 
+    # Intent: create a shift via natural language 
+    if _re.search(r"\bschedule\b", msg, _re.IGNORECASE):
+        today_iso = timezone.localdate().isoformat()
+        extracted = extract_shift_creation_query(msg, today_iso)
+        person_name = extracted.get("person_name")
+        branch_name = extracted.get("branch_name")
+        iso_date = extracted.get("date")
+        start_time_str = extracted.get("start_time")
+        end_time_str = extracted.get("end_time")
+
+        if not person_name:
+            return JsonResponse({"answer": "I couldn't work out who to schedule. Try: schedule John Smith in Luigi's for 9:00–17:00 on Friday."})
+        if not iso_date:
+            return JsonResponse({"answer": "I couldn't work out the date. Try: schedule John Smith in Luigi's for 9:00–17:00 on Friday."})
+        if not start_time_str or not end_time_str:
+            return JsonResponse({"answer": "I couldn't work out the shift times. Try: schedule John Smith in Luigi's for 9:00–17:00 on Friday."})
+
+        try:
+            shift_date = datetime.fromisoformat(iso_date).date()
+        except Exception:
+            return JsonResponse({"answer": "I couldn't parse the date. Try: schedule John Smith in Luigi's for 9:00–17:00 on Friday."})
+
+        # Override AI date with Python-computed weekday — AI frequently picks the wrong week
+        today_date = timezone.localdate()
+        weekday_idx, qualifier = extract_weekday_request(msg)
+        if weekday_idx is not None:
+            if qualifier == "next":
+                shift_date = next_weekday(today_date, weekday_idx)
+            elif qualifier == "this":
+                candidate = today_date + timedelta(days=(weekday_idx - today_date.weekday()))
+                shift_date = candidate if candidate >= today_date else next_weekday(today_date, weekday_idx)
+            else:
+                shift_date = next_weekday(today_date, weekday_idx)
+
+        try:
+            start_dt = timezone.make_aware(datetime.combine(shift_date, datetime.strptime(start_time_str, "%H:%M").time()), timezone.get_current_timezone())
+            end_dt = timezone.make_aware(datetime.combine(shift_date, datetime.strptime(end_time_str, "%H:%M").time()), timezone.get_current_timezone())
+        except Exception:
+            return JsonResponse({"answer": "I couldn't parse the shift times. Try: 9:00–17:00 on Friday."})
+
+        if end_dt <= start_dt:
+            return JsonResponse({"answer": "The end time must be after the start time."})
+
+        owned_ids = BusinessMembership.objects.filter(
+            user=request.user,
+            role__in=[BusinessMembership.OWNER, BusinessMembership.SUPERVISOR]
+        ).values_list("business_id", flat=True)
+
+        if branch_name:
+            matches = _find_branch(owned_ids, branch_name)
+            if matches.count() == 0:
+                return JsonResponse({"answer": f"I couldn't find a branch matching '{branch_name}'."})
+            if matches.count() > 1:
+                options = ", ".join(matches.values_list("name", flat=True)[:8])
+                return JsonResponse({"answer": f"That matches multiple branches: {options}. Be more specific."})
+            business = matches.first()
+        else:
+            owned = Business.objects.filter(id__in=owned_ids).order_by("name")
+            if owned.count() == 0:
+                return JsonResponse({"answer": "You don't seem to have access to any branches yet."})
+            if owned.count() > 1:
+                options = ", ".join(owned.values_list("name", flat=True)[:8])
+                return JsonResponse({"answer": f"Which branch? You have access to: {options}. Try: schedule John Smith in Luigi's for 9:00–17:00 on Friday."})
+            business = owned.first()
+
+        name_lower = person_name.lower()
+        members = User.objects.filter(businessmembership__business=business).distinct()
+        matched = [
+            u for u in members
+            if name_lower in (u.first_name + " " + u.last_name).lower()
+            or name_lower in u.username.lower()
+        ]
+
+        if not matched:
+            return JsonResponse({"answer": f"I couldn't find anyone called '{person_name}' at {business.name}."})
+        if len(matched) > 1:
+            names = ", ".join((u.first_name + " " + u.last_name).strip() or u.username for u in matched)
+            return JsonResponse({"answer": f"Multiple staff match '{person_name}': {names}. Use the full name."})
+
+        employee = matched[0]
+
+        # Prevent exact duplicate shifts
+        if WorkShift.objects.filter(business=business, user=employee, start=start_dt, end=end_dt).exists():
+            return JsonResponse({"answer": f"{employee.get_full_name() or employee.username} already has that exact shift."})
+
+        WorkShift.objects.create(
+            business=business,
+            user=employee,
+            start=start_dt,
+            end=end_dt,
+            created_by=request.user,
+        )
+
+        display = employee.get_full_name() or employee.username
+        date_label = shift_date.strftime("%A %d %b")
+        return JsonResponse({"answer": f"Shift created: {display} at {business.name} on {date_label}, {start_time_str}–{end_time_str}."})
+
+    # Default intent: who is working on a given day
     today_date = timezone.localdate()
     today = today_date.isoformat()
     extracted = extract_schedule_query(msg, today)
@@ -635,13 +752,10 @@ def schedule_chat_api(request):
 
     if branch_name:
         branch_name = branch_name.strip()
-        matches = Business.objects.filter(
-            id__in=owned_ids,
-            name__icontains=branch_name
-        ).order_by("name")
+        matches = _find_branch(owned_ids, branch_name)
 
         if matches.count() == 0:
-            return JsonResponse({"answer": f"I couldn't find a branch you own matching '{branch_name}'."})
+            return JsonResponse({"answer": f"I couldn't find a branch matching '{branch_name}'."})
         if matches.count() > 1:
             options = ", ".join(matches.values_list("name", flat=True)[:8])
             return JsonResponse({"answer": f"That matches multiple branches: {options}. Be more specific."})
@@ -650,10 +764,10 @@ def schedule_chat_api(request):
     else:
         owned = Business.objects.filter(id__in=owned_ids).order_by("name")
         if owned.count() == 0:
-            return JsonResponse({"answer": "You don't seem to own any branches yet."})
+            return JsonResponse({"answer": "You don't manage any branches yet."})
         if owned.count() > 1:
             options = ", ".join(owned.values_list("name", flat=True)[:8])
-            return JsonResponse({"answer": f"Which branch? You own: {options}. Ask like: who's working Friday in Luigi's?"})
+            return JsonResponse({"answer": f"Which branch? You manage:{options}. Ask like: who's working Friday in Luigi's?"})
         business = owned.first()
 
     tz = timezone.get_current_timezone()
